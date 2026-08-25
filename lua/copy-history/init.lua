@@ -3,7 +3,7 @@ local M = {}
 -- Default configuration options
 M.config = {
 	max_history = 10, -- Maximum number of copied items to remember
-	keymap = "<leader>ch", -- Default keymap to open the copy history window (<leader>ch)
+	keymap = "<leader>ch", -- Default keymap to open the copy history window
 	border = "rounded", -- Floating window border style
 }
 
@@ -89,14 +89,20 @@ function M.open_history_window()
 	-- Map '<CR>' (Enter Key) to select the item, close the view, and paste it under cursor
 	vim.keymap.set("n", "<CR>", function()
 		-- Get the current line number the cursor is sitting on
-		local cursor_line = vim.api.nvim_win_get_cursor(win)[1]
+		local cursor_pos = vim.api.nvim_win_get_cursor(win)
+		local cursor_line = cursor_pos[1]
+
+		-- Safely extract the corresponding text from history
 		local selected_text = M.history[cursor_line]
 
 		-- Close the floating window buffer instantly
 		vim.api.nvim_win_close(win, true)
 
 		-- Safely put/paste the selected text right after the cursor position in main buffer
-		vim.api.nvim_put(vim.split(selected_text, "\n"), "p", true, true)
+		if selected_text then
+			-- "c" stands for character-wise insertion (the correct API standard type)
+			vim.api.nvim_put(vim.split(selected_text, "\n"), "c", true, true)
+		end
 	end, { buffer = buf, silent = true })
 end
 
