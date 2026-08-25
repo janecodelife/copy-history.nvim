@@ -19,14 +19,14 @@ Add the following to your configuration file (e.g., `init.lua`):
 ```lua
 -- Add and load the copy-history plugin directly from GitHub
 vim.pack.add({
-    source = "janecodelife/copy-history.nvim",
+	"https://github.com/janecodelife/copy-history.nvim",
 })
+
 
 -- Initialize and configure the plugin
 require("copy-history").setup({
     keymap = "<leader>ch",  -- Hotkey combination to open the viewer window
     max_history = 10,       -- Number of copied text snippets to remember
-    border = "rounded",     -- Floating window border style (rounded, single, double, solid)
 })
 ```
 
