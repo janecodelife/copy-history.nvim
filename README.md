@@ -34,7 +34,7 @@ require("copy-history").setup({
 ## Demo Video 📺
 
 <p align="center">
-  <img src="assets/todo-tracker.gif" alt="todo-tracker-video" width="100%">
+  <img src="assets/copy-history.gif" alt="copy-history-video" width="100%">
 </p>
 
 ---
