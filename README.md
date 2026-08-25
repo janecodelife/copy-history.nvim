@@ -3,11 +3,12 @@
 [![Follow on X](https://img.shields.io/badge/Follow-@janecodelife-000000?style=for-the-badge&logo=x)](https://x.com/janecodelife)
 [![Subscribe on YouTube](https://img.shields.io/badge/Subscribe-@JaneCodeLife-FF0000?style=for-the-badge&logo=youtube)](https://www.youtube.com/@JaneCodeLife)
 
-A lightweight, high-performance, and minimalist clipboard history manager for Neovim. It automatically tracks everything you copy (yank) and lets you recall and paste it instantly via a floating window in a blink.
+A lightweight, high-performance, and minimalist clipboard history manager for Neovim. It automatically tracks everything you copy (yank) and lets you recall and paste it instantly via a floating window in a blink That Support Single Lines  And Mutiple Lines.
 
 ## ✨ Features
 - **Zero Dependencies:** Written purely in Lua, running 100% locally with zero external requirements.
 - **Duplicate Prevention:** Automatically removes older duplicate text snippets to keep your history clean.
+- **Support Single And Mutiple Lines:** Support And Working with single and multiple lines
 
 ---
 
