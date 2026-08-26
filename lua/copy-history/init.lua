@@ -119,82 +119,273 @@ function M.open_history_window()
 		return
 	end
 
-	-- 1. Create an isolated scratch buffer
-	local buf = vim.api.nvim_create_buf(false, true)
+	-- 1. Calculate responsive window dimensions
+	local total_cols = vim.o.columns
+	local total_lines = vim.o.lines
 
-	-- Format the display lines to show a preview snippet of each copied item
-	local display_lines = {}
-	for i, item in ipairs(M.history) do
-		local text = M.get_entry_text(item)
-		-- Replace newlines with spaces for cleaner single-line preview display
-		local preview = text:gsub("\n", " ")
-		-- Truncate long strings to fit perfectly in the window view
-		if #preview > 50 then
-			preview = preview:sub(1, 50) .. "..."
-		end
-		table.insert(display_lines, string.format(" [%d] %s", i, preview))
+	local show_preview = total_cols >= 70
+	local list_width = show_preview and math.floor(total_cols * 0.38) or math.floor(total_cols * 0.7)
+	local preview_width = show_preview and math.floor(total_cols * 0.46) or 0
+	local height = math.min(math.max(#M.history, 5), math.floor(total_lines * 0.6))
+	local row = math.floor((total_lines - height) / 2)
+
+	local total_width = show_preview and (list_width + preview_width + 2) or list_width
+	local list_col = math.max(0, math.floor((total_cols - total_width) / 2))
+	local preview_col = list_col + list_width + 2
+
+	-- 2. Create scratch buffers
+	local list_buf = vim.api.nvim_create_buf(false, true)
+	vim.bo[list_buf].buftype = "nofile"
+	vim.bo[list_buf].bufhidden = "wipe"
+
+	local preview_buf = nil
+	local preview_win = nil
+	if show_preview then
+		preview_buf = vim.api.nvim_create_buf(false, true)
+		vim.bo[preview_buf].buftype = "nofile"
+		vim.bo[preview_buf].bufhidden = "wipe"
 	end
 
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, display_lines)
-	vim.bo[buf].modifiable = false -- Make it read-only so users cannot type in it
+	-- Helper function to format lines for the list picker
+	local function render_display_lines()
+		local display_lines = {}
+		for i, item in ipairs(M.history) do
+			local text = M.get_entry_text(item)
+			local file = (type(item) == "table" and item.file) or "[No Name]"
+			local line = (type(item) == "table" and item.line) or 1
+			local line_count = (type(item) == "table" and item.line_count) or #vim.split(text, "\n")
+			local preview = text:gsub("\n", " ")
+			local max_snip = math.max(10, list_width - 30)
+			if #preview > max_snip then
+				preview = preview:sub(1, max_snip) .. "..."
+			end
+			table.insert(display_lines, string.format(" [%d] %s:%d (%dL) · %s", i, file, line, line_count, preview))
+		end
+		return display_lines
+	end
 
-	-- 2. Define floating window dimensional layout properties
-	local width = math.floor(vim.o.columns * 0.6)
-	local height = math.min(#M.history, math.floor(vim.o.lines * 0.5))
-	local row = math.floor((vim.o.lines - height) / 2)
-	local col = math.floor((vim.o.columns - width) / 2)
+	vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, render_display_lines())
+	vim.bo[list_buf].modifiable = false
 
-	local opts = {
+	-- 3. Open Floating Windows
+	local list_opts = {
 		relative = "editor",
-		width = width,
+		width = list_width,
 		height = height,
 		row = row,
-		col = col,
+		col = list_col,
 		style = "minimal",
 		border = M.config.border,
-		title = " ⎘  Copy Clipboard History ",
+		title = " ⎘ Copy History (Enter: Paste | e: Edit | d: Del | y: Yank) ",
 		title_pos = "center",
 	}
+	local list_win = vim.api.nvim_open_win(list_buf, true, list_opts)
 
-	-- 3. Launch the floating window
-	local win = vim.api.nvim_open_win(buf, true, opts)
+	if show_preview and preview_buf then
+		local preview_opts = {
+			relative = "editor",
+			width = preview_width,
+			height = height,
+			row = row,
+			col = preview_col,
+			style = "minimal",
+			border = M.config.border,
+			title = " 👁 Preview ",
+			title_pos = "center",
+		}
+		preview_win = vim.api.nvim_open_win(preview_buf, false, preview_opts)
+	end
 
-	local function close_win()
-		if vim.api.nvim_win_is_valid(win) then
-			vim.api.nvim_win_close(win, true)
+	-- Safe window closer function
+	local function close_all_windows()
+		if vim.api.nvim_win_is_valid(list_win) then
+			vim.api.nvim_win_close(list_win, true)
+		end
+		if preview_win and vim.api.nvim_win_is_valid(preview_win) then
+			vim.api.nvim_win_close(preview_win, true)
 		end
 	end
 
-	-- Map 'q' and '<Esc>' to instantly close the history window picker view
-	vim.keymap.set("n", "q", close_win, { buffer = buf, silent = true, nowait = true })
-	vim.keymap.set("n", "<Esc>", close_win, { buffer = buf, silent = true, nowait = true })
+	-- Synchronize preview window with active cursor selection
+	local function update_preview(idx)
+		if not show_preview or not preview_buf or not preview_win or not vim.api.nvim_win_is_valid(preview_win) then
+			return
+		end
+		local entry = M.history[idx]
+		if not entry then
+			vim.bo[preview_buf].modifiable = true
+			vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, { "-- No preview available --" })
+			vim.bo[preview_buf].modifiable = false
+			return
+		end
 
-	-- Automatically close floating window on focus loss (switching window or leaving buffer)
-	vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
-		buffer = buf,
-		once = true,
-		callback = close_win,
+		local text = M.get_entry_text(entry)
+		local lines = vim.split(text, "\n")
+		vim.bo[preview_buf].modifiable = true
+		vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
+		vim.bo[preview_buf].modifiable = false
+
+		if type(entry) == "table" and entry.filetype and entry.filetype ~= "" then
+			pcall(function()
+				vim.bo[preview_buf].filetype = entry.filetype
+			end)
+		end
+
+		local title_file = (type(entry) == "table" and entry.file) or "Snippet"
+		local title_line = (type(entry) == "table" and entry.line) or 1
+		pcall(vim.api.nvim_win_set_config, preview_win, {
+			title = string.format(" 👁 Preview: %s:%d ", title_file, title_line),
+			title_pos = "center",
+		})
+	end
+
+	-- Initial preview update
+	update_preview(1)
+
+	-- Update preview on cursor movement in list window
+	vim.api.nvim_create_autocmd("CursorMoved", {
+		buffer = list_buf,
+		callback = function()
+			if vim.api.nvim_win_is_valid(list_win) then
+				local cur_line = vim.api.nvim_win_get_cursor(list_win)[1]
+				update_preview(cur_line)
+			end
+		end,
 	})
 
-	-- Map '<CR>' (Enter Key) to select the item, close the view, and paste it under cursor
-	vim.keymap.set("n", "<CR>", function()
-		-- Get the current line number the cursor is sitting on
-		local cursor_pos = vim.api.nvim_win_get_cursor(win)
-		local cursor_line = cursor_pos[1]
-
-		-- Safely extract the corresponding text from history
-		local selected_entry = M.history[cursor_line]
-		local selected_text = M.get_entry_text(selected_entry)
-
-		-- Close the floating window buffer instantly
-		close_win()
-
-		-- Safely put/paste the selected text right after the cursor position in main buffer
-		if selected_text and selected_text ~= "" then
-			-- "c" stands for character-wise insertion (the correct API standard type)
-			vim.api.nvim_put(vim.split(selected_text, "\n"), "c", true, true)
+	-- Refresh list and preview after deletion or edits
+	local function refresh_list_and_preview()
+		if #M.history == 0 then
+			close_all_windows()
+			vim.notify("Copy History: History is now empty! ⎘", vim.log.levels.INFO)
+			return
 		end
-	end, { buffer = buf, silent = true, nowait = true })
+		vim.bo[list_buf].modifiable = true
+		vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, render_display_lines())
+		vim.bo[list_buf].modifiable = false
+
+		if vim.api.nvim_win_is_valid(list_win) then
+			local cur = vim.api.nvim_win_get_cursor(list_win)[1]
+			if cur > #M.history then
+				cur = #M.history
+				vim.api.nvim_win_set_cursor(list_win, { cur, 0 })
+			end
+			update_preview(cur)
+		end
+	end
+
+	-- Defocus autocommand: close when focus leaves both picker and preview windows
+	local function on_leave()
+		vim.schedule(function()
+			local cur_win = vim.api.nvim_get_current_win()
+			if cur_win ~= list_win and (not preview_win or cur_win ~= preview_win) then
+				close_all_windows()
+			end
+		end)
+	end
+
+	vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
+		buffer = list_buf,
+		callback = on_leave,
+	})
+
+	if preview_buf then
+		vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
+			buffer = preview_buf,
+			callback = on_leave,
+		})
+	end
+
+	-- Keymap: 'q' and '<Esc>' to dismiss
+	vim.keymap.set("n", "q", close_all_windows, { buffer = list_buf, silent = true, nowait = true })
+	vim.keymap.set("n", "<Esc>", close_all_windows, { buffer = list_buf, silent = true, nowait = true })
+
+	-- Keymap: 'd' / '<Del>' to delete selected item
+	local function delete_item()
+		if #M.history == 0 then return end
+		local cur = vim.api.nvim_win_get_cursor(list_win)[1]
+		table.remove(M.history, cur)
+		M.save_history()
+		refresh_list_and_preview()
+	end
+	vim.keymap.set("n", "d", delete_item, { buffer = list_buf, silent = true, nowait = true })
+	vim.keymap.set("n", "<Del>", delete_item, { buffer = list_buf, silent = true, nowait = true })
+
+	-- Keymap: 'y' to yank selected item to register without closing/pasting
+	vim.keymap.set("n", "y", function()
+		if #M.history == 0 then return end
+		local cur = vim.api.nvim_win_get_cursor(list_win)[1]
+		local text = M.get_entry_text(M.history[cur])
+		if text and text ~= "" then
+			vim.fn.setreg('"', text)
+			pcall(vim.fn.setreg, "+", text)
+			vim.notify("Copy History: Yanked entry to clipboard! 📋", vim.log.levels.INFO)
+		end
+	end, { buffer = list_buf, silent = true, nowait = true })
+
+	-- Paste handler helper (character-wise insertion)
+	local function paste_selected(paste_after)
+		if #M.history == 0 then return end
+		local cur = vim.api.nvim_win_get_cursor(list_win)[1]
+		local text = M.get_entry_text(M.history[cur])
+		close_all_windows()
+		if text and text ~= "" then
+			vim.api.nvim_put(vim.split(text, "\n"), "c", paste_after, true)
+		end
+	end
+
+	-- Keymap: '<CR>' and 'p' to paste after cursor
+	vim.keymap.set("n", "<CR>", function() paste_selected(true) end, { buffer = list_buf, silent = true, nowait = true })
+	vim.keymap.set("n", "p", function() paste_selected(true) end, { buffer = list_buf, silent = true, nowait = true })
+
+	-- Keymap: 'P' to paste before cursor
+	vim.keymap.set("n", "P", function() paste_selected(false) end, { buffer = list_buf, silent = true, nowait = true })
+
+	-- Keymap: 'e' for Edit Mode in preview window
+	if show_preview and preview_buf and preview_win then
+		vim.keymap.set("n", "e", function()
+			if #M.history == 0 then return end
+			local cur_idx = vim.api.nvim_win_get_cursor(list_win)[1]
+			vim.api.nvim_set_current_win(preview_win)
+			vim.bo[preview_buf].modifiable = true
+
+			-- In edit mode: <CR> or <C-s> applies modifications and pastes
+			local function save_and_paste()
+				local modified_lines = vim.api.nvim_buf_get_lines(preview_buf, 0, -1, false)
+				local modified_text = table.concat(modified_lines, "\n")
+				if type(M.history[cur_idx]) == "table" then
+					M.history[cur_idx].text = modified_text
+					M.history[cur_idx].line_count = #modified_lines
+				else
+					M.history[cur_idx] = modified_text
+				end
+				M.save_history()
+				close_all_windows()
+				if modified_text ~= "" then
+					vim.api.nvim_put(modified_lines, "c", true, true)
+				end
+			end
+
+			vim.keymap.set("n", "<CR>", save_and_paste, { buffer = preview_buf, silent = true, nowait = true })
+			vim.keymap.set("n", "<C-s>", save_and_paste, { buffer = preview_buf, silent = true, nowait = true })
+
+			-- <Esc> or 'q' returns focus back to list window
+			vim.keymap.set("n", "q", function()
+				vim.bo[preview_buf].modifiable = false
+				if vim.api.nvim_win_is_valid(list_win) then
+					vim.api.nvim_set_current_win(list_win)
+				end
+			end, { buffer = preview_buf, silent = true, nowait = true })
+			vim.keymap.set("n", "<Esc>", function()
+				vim.bo[preview_buf].modifiable = false
+				if vim.api.nvim_win_is_valid(list_win) then
+					vim.api.nvim_set_current_win(list_win)
+				end
+			end, { buffer = preview_buf, silent = true, nowait = true })
+
+			vim.notify("Copy History: Edit mode active in preview. Press <CR> to save & paste, <Esc> to return.", vim.log.levels.INFO)
+		end, { buffer = list_buf, silent = true, nowait = true })
+	end
 end
 
 -- Standard configuration setup framework entry-point
