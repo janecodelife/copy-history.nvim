@@ -21,6 +21,42 @@ function M.get_entry_text(item)
 	return ""
 end
 
+-- Computes the deterministic JSON storage file path for the current working directory
+function M.get_storage_path()
+	local storage_dir = M.config.storage_dir or (vim.fn.stdpath("data") .. "/copy-history")
+	local cwd = vim.fs.normalize(vim.fn.getcwd())
+	local safe_name = cwd:gsub("[/\\]", "%%"):gsub(":", "%%") .. ".json"
+	return storage_dir, storage_dir .. "/" .. safe_name
+end
+
+-- Loads persisted history from disk for the active working directory
+function M.load_history()
+	local _, file_path = M.get_storage_path()
+	if vim.fn.filereadable(file_path) == 1 then
+		local lines = vim.fn.readfile(file_path)
+		if lines and #lines > 0 then
+			local ok, data = pcall(vim.json.decode, table.concat(lines, "\n"))
+			if ok and type(data) == "table" then
+				M.history = data
+				return
+			end
+		end
+	end
+	M.history = {}
+end
+
+-- Persists the active history list to disk for the current working directory
+function M.save_history()
+	local storage_dir, file_path = M.get_storage_path()
+	if vim.fn.isdirectory(storage_dir) == 0 then
+		vim.fn.mkdir(storage_dir, "p")
+	end
+	local ok, json_str = pcall(vim.json.encode, M.history)
+	if ok and json_str then
+		vim.fn.writefile({ json_str }, file_path)
+	end
+end
+
 -- Core listener function triggered immediately after any text is copied/yanked
 function M.on_text_copy()
 	-- Get the recently yanked text string from the default register
@@ -71,6 +107,9 @@ function M.on_text_copy()
 	if #M.history > M.config.max_history then
 		table.remove(M.history)
 	end
+
+	-- Automatically persist updated history to disk
+	M.save_history()
 end
 
 -- Generates and displays the visual history list in a centered floating window
@@ -162,12 +201,31 @@ end
 function M.setup(user_config)
 	M.config = vim.tbl_deep_extend("force", M.config, user_config or {})
 
-	-- Initialize automated autocommand listener looking for TextYankPost event
+	-- Automatically load persisted history for current working directory
+	M.load_history()
+
+	-- Initialize automated autocommand listener group
 	local group = vim.api.nvim_create_augroup("CopyHistoryGroup", { clear = true })
 	vim.api.nvim_create_autocmd("TextYankPost", {
 		group = group,
 		callback = function()
 			M.on_text_copy()
+		end,
+	})
+
+	-- Reload directory-specific history when working directory changes
+	vim.api.nvim_create_autocmd("DirChanged", {
+		group = group,
+		callback = function()
+			M.load_history()
+		end,
+	})
+
+	-- Ensure latest history is flushed to disk before quitting Neovim
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = group,
+		callback = function()
+			M.save_history()
 		end,
 	})
 
