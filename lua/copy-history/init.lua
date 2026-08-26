@@ -7,7 +7,7 @@ M.config = {
 	border = "rounded", -- Floating window border style
 	max_payload_size = 10 * 1024 * 1024, -- Maximum payload size in bytes (10 MB)
 	window = {
-		width = 0.85, -- Overall width ratio (0.0 to 1.0) or fixed integer column width
+		width = 0.88, -- Overall width ratio (0.0 to 1.0) or fixed integer column width
 		height = 0.60, -- Overall height ratio (0.0 to 1.0) or fixed integer row height
 		preview_ratio = 0.55, -- Portion of width allocated to preview window (default 55%)
 		min_height = 8, -- Minimum height in rows
@@ -143,14 +143,16 @@ function M.open_history_window()
 	local total_lines = vim.o.lines
 	local win_cfg = M.config.window or {}
 
-	local target_width = resolve_dim(win_cfg.width, total_cols, 0.85)
+	local target_width = resolve_dim(win_cfg.width, total_cols, 0.88)
 	local target_height = resolve_dim(win_cfg.height, total_lines, 0.60)
 	local min_height = math.max(1, win_cfg.min_height or 8)
 	local height = math.min(math.max(1, total_lines - 4), math.max(min_height, target_height))
 	local row = math.max(0, math.floor((total_lines - height) / 2))
 
 	local show_preview = (win_cfg.preview ~= false) and (total_cols >= 50)
-	local preview_ratio = (win_cfg.preview_ratio and win_cfg.preview_ratio > 0 and win_cfg.preview_ratio < 1) and win_cfg.preview_ratio or 0.55
+	local preview_ratio = (win_cfg.preview_ratio and win_cfg.preview_ratio > 0 and win_cfg.preview_ratio < 1)
+			and win_cfg.preview_ratio
+		or 0.55
 	local preview_width = show_preview and math.floor((target_width - 2) * preview_ratio) or 0
 	local list_width = show_preview and (target_width - preview_width - 2) or target_width
 
@@ -200,7 +202,7 @@ function M.open_history_window()
 		col = list_col,
 		style = "minimal",
 		border = M.config.border,
-		title = " 󰅍 Copy History (Enter: Paste | e: Edit | d: Del | y: Yank) ",
+		title = "󰅍 Copy History (Enter: Paste | e: Edit | d: Del | y: Yank)",
 		title_pos = "center",
 	}
 	local list_win = vim.api.nvim_open_win(list_buf, true, list_opts)
@@ -326,7 +328,9 @@ function M.open_history_window()
 
 	-- Keymap: 'd' / '<Del>' to delete selected item
 	local function delete_item()
-		if #M.history == 0 then return end
+		if #M.history == 0 then
+			return
+		end
 		local cur = vim.api.nvim_win_get_cursor(list_win)[1]
 		table.remove(M.history, cur)
 		M.save_history()
@@ -337,7 +341,9 @@ function M.open_history_window()
 
 	-- Keymap: 'y' to yank selected item to register without closing/pasting
 	vim.keymap.set("n", "y", function()
-		if #M.history == 0 then return end
+		if #M.history == 0 then
+			return
+		end
 		local cur = vim.api.nvim_win_get_cursor(list_win)[1]
 		local text = M.get_entry_text(M.history[cur])
 		if text and text ~= "" then
@@ -349,7 +355,9 @@ function M.open_history_window()
 
 	-- Paste handler helper (character-wise insertion)
 	local function paste_selected(paste_after)
-		if #M.history == 0 then return end
+		if #M.history == 0 then
+			return
+		end
 		local cur = vim.api.nvim_win_get_cursor(list_win)[1]
 		local text = M.get_entry_text(M.history[cur])
 		close_all_windows()
@@ -359,16 +367,24 @@ function M.open_history_window()
 	end
 
 	-- Keymap: '<CR>' and 'p' to paste after cursor
-	vim.keymap.set("n", "<CR>", function() paste_selected(true) end, { buffer = list_buf, silent = true, nowait = true })
-	vim.keymap.set("n", "p", function() paste_selected(true) end, { buffer = list_buf, silent = true, nowait = true })
+	vim.keymap.set("n", "<CR>", function()
+		paste_selected(true)
+	end, { buffer = list_buf, silent = true, nowait = true })
+	vim.keymap.set("n", "p", function()
+		paste_selected(true)
+	end, { buffer = list_buf, silent = true, nowait = true })
 
 	-- Keymap: 'P' to paste before cursor
-	vim.keymap.set("n", "P", function() paste_selected(false) end, { buffer = list_buf, silent = true, nowait = true })
+	vim.keymap.set("n", "P", function()
+		paste_selected(false)
+	end, { buffer = list_buf, silent = true, nowait = true })
 
 	-- Keymap: 'e' for Edit Mode in preview window
 	if show_preview and preview_buf and preview_win then
 		vim.keymap.set("n", "e", function()
-			if #M.history == 0 then return end
+			if #M.history == 0 then
+				return
+			end
 			local cur_idx = vim.api.nvim_win_get_cursor(list_win)[1]
 			vim.api.nvim_set_current_win(preview_win)
 			vim.bo[preview_buf].modifiable = true
@@ -407,7 +423,10 @@ function M.open_history_window()
 				end
 			end, { buffer = preview_buf, silent = true, nowait = true })
 
-			vim.notify("Copy History: Edit mode active in preview. Press <CR> to save & paste, <Esc> to return.", vim.log.levels.INFO)
+			vim.notify(
+				"Copy History: Edit mode active in preview. Press <CR> to save & paste, <Esc> to return.",
+				vim.log.levels.INFO
+			)
 		end, { buffer = list_buf, silent = true, nowait = true })
 	end
 end
