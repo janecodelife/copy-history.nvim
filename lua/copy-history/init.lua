@@ -6,6 +6,12 @@ M.config = {
 	keymap = "<leader>ch", -- Default keymap to open the copy history window
 	border = "rounded", -- Floating window border style
 	max_payload_size = 10 * 1024 * 1024, -- Maximum payload size in bytes (10 MB)
+	window = {
+		width = 0.85, -- Overall width ratio (0.0 to 1.0) or fixed integer column width
+		height = 0.60, -- Overall height ratio (0.0 to 1.0) or fixed integer row height
+		preview_ratio = 0.55, -- Portion of width allocated to preview window (default 55%)
+		min_height = 8, -- Minimum height in rows
+	},
 }
 
 -- Table to store the copied text history items (structured metadata entries)
@@ -115,22 +121,40 @@ end
 -- Generates and displays the visual history list in a centered floating window
 function M.open_history_window()
 	if #M.history == 0 then
-		vim.notify("Copy History: History is currently empty! ⎘ ", vim.log.levels.INFO)
+		vim.notify("Copy History: History is currently empty.", vim.log.levels.INFO)
 		return
 	end
 
-	-- 1. Calculate responsive window dimensions
+	-- Helper function to resolve dynamic dimensions from ratio (0-1) or fixed columns/rows (>1)
+	local function resolve_dim(val, max_avail, fallback_ratio)
+		local v = val or fallback_ratio
+		if type(v) == "number" then
+			if v > 0 and v <= 1 then
+				return math.max(1, math.floor(max_avail * v))
+			elseif v > 1 then
+				return math.min(math.floor(v), max_avail)
+			end
+		end
+		return math.max(1, math.floor(max_avail * fallback_ratio))
+	end
+
+	-- 1. Calculate responsive window dimensions based on user configuration
 	local total_cols = vim.o.columns
 	local total_lines = vim.o.lines
+	local win_cfg = M.config.window or {}
 
-	local show_preview = total_cols >= 70
-	local list_width = show_preview and math.floor(total_cols * 0.38) or math.floor(total_cols * 0.7)
-	local preview_width = show_preview and math.floor(total_cols * 0.46) or 0
-	local height = math.min(math.max(#M.history, 5), math.floor(total_lines * 0.6))
-	local row = math.floor((total_lines - height) / 2)
+	local target_width = resolve_dim(win_cfg.width, total_cols, 0.85)
+	local target_height = resolve_dim(win_cfg.height, total_lines, 0.60)
+	local min_height = math.max(1, win_cfg.min_height or 8)
+	local height = math.min(math.max(1, total_lines - 4), math.max(min_height, target_height))
+	local row = math.max(0, math.floor((total_lines - height) / 2))
 
-	local total_width = show_preview and (list_width + preview_width + 2) or list_width
-	local list_col = math.max(0, math.floor((total_cols - total_width) / 2))
+	local show_preview = (win_cfg.preview ~= false) and (total_cols >= 50)
+	local preview_ratio = (win_cfg.preview_ratio and win_cfg.preview_ratio > 0 and win_cfg.preview_ratio < 1) and win_cfg.preview_ratio or 0.55
+	local preview_width = show_preview and math.floor((target_width - 2) * preview_ratio) or 0
+	local list_width = show_preview and (target_width - preview_width - 2) or target_width
+
+	local list_col = math.max(0, math.floor((total_cols - target_width) / 2))
 	local preview_col = list_col + list_width + 2
 
 	-- 2. Create scratch buffers
@@ -176,7 +200,7 @@ function M.open_history_window()
 		col = list_col,
 		style = "minimal",
 		border = M.config.border,
-		title = " ⎘ Copy History (Enter: Paste | e: Edit | d: Del | y: Yank) ",
+		title = " 󰅍 Copy History (Enter: Paste | e: Edit | d: Del | y: Yank) ",
 		title_pos = "center",
 	}
 	local list_win = vim.api.nvim_open_win(list_buf, true, list_opts)
@@ -190,7 +214,7 @@ function M.open_history_window()
 			col = preview_col,
 			style = "minimal",
 			border = M.config.border,
-			title = " 👁 Preview ",
+			title = " 󰈈 Preview ",
 			title_pos = "center",
 		}
 		preview_win = vim.api.nvim_open_win(preview_buf, false, preview_opts)
@@ -234,7 +258,7 @@ function M.open_history_window()
 		local title_file = (type(entry) == "table" and entry.file) or "Snippet"
 		local title_line = (type(entry) == "table" and entry.line) or 1
 		pcall(vim.api.nvim_win_set_config, preview_win, {
-			title = string.format(" 👁 Preview: %s:%d ", title_file, title_line),
+			title = string.format(" 󰈈 Preview: %s:%d ", title_file, title_line),
 			title_pos = "center",
 		})
 	end
@@ -257,7 +281,7 @@ function M.open_history_window()
 	local function refresh_list_and_preview()
 		if #M.history == 0 then
 			close_all_windows()
-			vim.notify("Copy History: History is now empty! ⎘", vim.log.levels.INFO)
+			vim.notify("Copy History: History is now empty.", vim.log.levels.INFO)
 			return
 		end
 		vim.bo[list_buf].modifiable = true
@@ -319,7 +343,7 @@ function M.open_history_window()
 		if text and text ~= "" then
 			vim.fn.setreg('"', text)
 			pcall(vim.fn.setreg, "+", text)
-			vim.notify("Copy History: Yanked entry to clipboard! 📋", vim.log.levels.INFO)
+			vim.notify("Copy History: Yanked entry to clipboard!", vim.log.levels.INFO)
 		end
 	end, { buffer = list_buf, silent = true, nowait = true })
 
