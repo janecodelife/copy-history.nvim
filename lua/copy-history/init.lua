@@ -40,7 +40,7 @@ end
 -- Generates and displays the visual history list in a centered floating window
 function M.open_history_window()
 	if #M.history == 0 then
-		vim.notify("Copy History: History is currently empty! 📋", vim.log.levels.INFO)
+		vim.notify("Copy History: History is currently empty! ⎘ ", vim.log.levels.INFO)
 		return
 	end
 
@@ -76,15 +76,29 @@ function M.open_history_window()
 		col = col,
 		style = "minimal",
 		border = M.config.border,
-		title = " 📋 Copy Clipboard History ",
+		title = " ⎘  Copy Clipboard History ",
 		title_pos = "center",
 	}
 
 	-- 3. Launch the floating window
 	local win = vim.api.nvim_open_win(buf, true, opts)
 
-	-- Map 'q' to instantly close the history window picker view
-	vim.keymap.set("n", "q", ":close<CR>", { buffer = buf, silent = true })
+	local function close_win()
+		if vim.api.nvim_win_is_valid(win) then
+			vim.api.nvim_win_close(win, true)
+		end
+	end
+
+	-- Map 'q' and '<Esc>' to instantly close the history window picker view
+	vim.keymap.set("n", "q", close_win, { buffer = buf, silent = true, nowait = true })
+	vim.keymap.set("n", "<Esc>", close_win, { buffer = buf, silent = true, nowait = true })
+
+	-- Automatically close floating window on focus loss (switching window or leaving buffer)
+	vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
+		buffer = buf,
+		once = true,
+		callback = close_win,
+	})
 
 	-- Map '<CR>' (Enter Key) to select the item, close the view, and paste it under cursor
 	vim.keymap.set("n", "<CR>", function()
@@ -96,14 +110,14 @@ function M.open_history_window()
 		local selected_text = M.history[cursor_line]
 
 		-- Close the floating window buffer instantly
-		vim.api.nvim_win_close(win, true)
+		close_win()
 
 		-- Safely put/paste the selected text right after the cursor position in main buffer
 		if selected_text then
 			-- "c" stands for character-wise insertion (the correct API standard type)
 			vim.api.nvim_put(vim.split(selected_text, "\n"), "c", true, true)
 		end
-	end, { buffer = buf, silent = true })
+	end, { buffer = buf, silent = true, nowait = true })
 end
 
 -- Standard configuration setup framework entry-point

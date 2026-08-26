@@ -47,7 +47,7 @@ require("copy-history").setup({
 2. Whenever you want to paste something from your history, press **`<leader>ch`** (Space + c + h by default) in **Normal Mode**.
 3. A centered floating window will open showing your recent copy history snippets.
 4. **Navigate** up/down the list, then press **`Enter`** on any line to automatically close the window and paste that text right after your cursor!
-5. To close the picker menu without pasting anything, simply press **`q`**.
+5. To close the picker menu without pasting anything, press **`q`**, press **`<Esc>`**, or simply switch focus away from the window.
 
 --- 
 
