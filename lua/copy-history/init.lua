@@ -5,10 +5,21 @@ M.config = {
 	max_history = 10, -- Maximum number of copied items to remember
 	keymap = "<leader>ch", -- Default keymap to open the copy history window
 	border = "rounded", -- Floating window border style
+	max_payload_size = 10 * 1024 * 1024, -- Maximum payload size in bytes (10 MB)
 }
 
--- Table to store the copied text history strings
+-- Table to store the copied text history items (structured metadata entries)
 M.history = {}
+
+-- Safely retrieves raw text snippet from a history item (backward-compatible)
+function M.get_entry_text(item)
+	if type(item) == "table" then
+		return item.text or ""
+	elseif type(item) == "string" then
+		return item
+	end
+	return ""
+end
 
 -- Core listener function triggered immediately after any text is copied/yanked
 function M.on_text_copy()
@@ -20,16 +31,41 @@ function M.on_text_copy()
 		return
 	end
 
+	-- Enforce maximum payload limit (protects memory and JSON disk I/O)
+	if #copied_text > (M.config.max_payload_size or (10 * 1024 * 1024)) then
+		return
+	end
+
 	-- Check if this exact text already exists in history; remove it to prevent duplicates
 	for i, v in ipairs(M.history) do
-		if v == copied_text then
+		if M.get_entry_text(v) == copied_text then
 			table.remove(M.history, i)
 			break
 		end
 	end
 
-	-- Insert the new text at the very top (index 1) of our history list
-	table.insert(M.history, 1, copied_text)
+	-- Capture source context metadata
+	local raw_file = vim.api.nvim_buf_get_name(0)
+	local display_file = raw_file ~= "" and vim.fn.fnamemodify(raw_file, ":~:.") or "[No Name]"
+	local cursor_line = 1
+	local ok_cursor, pos = pcall(vim.api.nvim_win_get_cursor, 0)
+	if ok_cursor and pos then
+		cursor_line = pos[1]
+	end
+	local ft = vim.bo.filetype ~= "" and vim.bo.filetype or "text"
+	local lines = vim.split(copied_text, "\n")
+
+	local entry = {
+		text = copied_text,
+		file = display_file,
+		line = cursor_line,
+		filetype = ft,
+		line_count = #lines,
+		time = os.time(),
+	}
+
+	-- Insert the new entry at the very top (index 1) of our history list
+	table.insert(M.history, 1, entry)
 
 	-- Cap the history list size based on the user's max_history configuration
 	if #M.history > M.config.max_history then
@@ -49,7 +85,8 @@ function M.open_history_window()
 
 	-- Format the display lines to show a preview snippet of each copied item
 	local display_lines = {}
-	for i, text in ipairs(M.history) do
+	for i, item in ipairs(M.history) do
+		local text = M.get_entry_text(item)
 		-- Replace newlines with spaces for cleaner single-line preview display
 		local preview = text:gsub("\n", " ")
 		-- Truncate long strings to fit perfectly in the window view
@@ -107,13 +144,14 @@ function M.open_history_window()
 		local cursor_line = cursor_pos[1]
 
 		-- Safely extract the corresponding text from history
-		local selected_text = M.history[cursor_line]
+		local selected_entry = M.history[cursor_line]
+		local selected_text = M.get_entry_text(selected_entry)
 
 		-- Close the floating window buffer instantly
 		close_win()
 
 		-- Safely put/paste the selected text right after the cursor position in main buffer
-		if selected_text then
+		if selected_text and selected_text ~= "" then
 			-- "c" stands for character-wise insertion (the correct API standard type)
 			vim.api.nvim_put(vim.split(selected_text, "\n"), "c", true, true)
 		end
