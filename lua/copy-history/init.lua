@@ -151,7 +151,8 @@ function M.open_history_window()
 	local height = math.min(math.max(1, total_lines - 4), math.max(min_height, target_height))
 	local row = math.max(0, math.floor((total_lines - height) / 2))
 
-	local show_preview = (win_cfg.preview ~= false) and (total_cols >= 50)
+	-- Adaptive dual-pane threshold (only split into two panes if screen is wide enough)
+	local show_preview = (win_cfg.preview ~= false) and (total_cols >= 75) and (target_width >= 65)
 	local preview_ratio = (win_cfg.preview_ratio and win_cfg.preview_ratio > 0 and win_cfg.preview_ratio < 1)
 			and win_cfg.preview_ratio
 		or 0.55
@@ -174,7 +175,36 @@ function M.open_history_window()
 		vim.bo[preview_buf].bufhidden = "wipe"
 	end
 
-	-- Helper function to format lines for the list picker
+	-- Helper function to generate responsive titles based on window width
+	local function get_list_title(w)
+		if w >= 60 then
+			return " 󰅍 Copy History (Enter: Paste | e: Edit | d: Del | y: Yank) "
+		elseif w >= 42 then
+			return " 󰅍 Copy History (Enter/e/d/y) "
+		elseif w >= 22 then
+			return " 󰅍 Copy History "
+		else
+			return " 󰅍 "
+		end
+	end
+
+	local function get_preview_title(file, line, w)
+		local short_file = vim.fn.fnamemodify(file or "Snippet", ":t")
+		local full_title = string.format(" 󰈈 Preview: %s:%d ", file or "Snippet", line or 1)
+		local short_title = string.format(" 󰈈 Preview: %s:%d ", short_file, line or 1)
+		local min_title = " 󰈈 Preview "
+		if #full_title <= (w - 4) then
+			return full_title
+		elseif #short_title <= (w - 4) then
+			return short_title
+		elseif #min_title <= (w - 4) then
+			return min_title
+		else
+			return " 󰈈 "
+		end
+	end
+
+	-- Helper function to format lines for the list picker adaptively
 	local function render_display_lines()
 		local display_lines = {}
 		for i, item in ipairs(M.history) do
@@ -183,11 +213,22 @@ function M.open_history_window()
 			local line = (type(item) == "table" and item.line) or 1
 			local line_count = (type(item) == "table" and item.line_count) or #vim.split(text, "\n")
 			local preview = text:gsub("\n", " ")
-			local max_snip = math.max(10, list_width - 30)
-			if #preview > max_snip then
-				preview = preview:sub(1, max_snip) .. "..."
+
+			local prefix
+			if list_width >= 45 then
+				prefix = string.format(" [%d] %s:%d (%dL) · ", i, file, line, line_count)
+			elseif list_width >= 28 then
+				local short_file = vim.fn.fnamemodify(file, ":t")
+				prefix = string.format(" [%d] %s:%d · ", i, short_file, line)
+			else
+				prefix = string.format(" [%d] ", i)
 			end
-			table.insert(display_lines, string.format(" [%d] %s:%d (%dL) · %s", i, file, line, line_count, preview))
+
+			local avail_len = math.max(5, list_width - #prefix - 2)
+			if #preview > avail_len then
+				preview = preview:sub(1, avail_len) .. "..."
+			end
+			table.insert(display_lines, prefix .. preview)
 		end
 		return display_lines
 	end
@@ -195,7 +236,7 @@ function M.open_history_window()
 	vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, render_display_lines())
 	vim.bo[list_buf].modifiable = false
 
-	-- 3. Open Floating Windows
+	-- 3. Open Floating Windows with responsive titles
 	local list_opts = {
 		relative = "editor",
 		width = list_width,
@@ -204,7 +245,7 @@ function M.open_history_window()
 		col = list_col,
 		style = "minimal",
 		border = M.config.border,
-		title = "󰅍 Copy History (Enter: Paste | e: Edit | d: Del | y: Yank)",
+		title = get_list_title(list_width),
 		title_pos = "center",
 	}
 	local list_win = vim.api.nvim_open_win(list_buf, true, list_opts)
@@ -218,7 +259,7 @@ function M.open_history_window()
 			col = preview_col,
 			style = "minimal",
 			border = M.config.border,
-			title = " 󰈈 Preview ",
+			title = get_preview_title(nil, nil, preview_width),
 			title_pos = "center",
 		}
 		preview_win = vim.api.nvim_open_win(preview_buf, false, preview_opts)
@@ -266,7 +307,7 @@ function M.open_history_window()
 		local title_file = (type(entry) == "table" and entry.file) or "Snippet"
 		local title_line = (type(entry) == "table" and entry.line) or 1
 		pcall(vim.api.nvim_win_set_config, preview_win, {
-			title = string.format(" 󰈈 Preview: %s:%d ", title_file, title_line),
+			title = get_preview_title(title_file, title_line, preview_width),
 			title_pos = "center",
 		})
 	end
