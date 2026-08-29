@@ -6,6 +6,8 @@ M.config = {
 	keymap = "<leader>ch", -- Default keymap to open the copy history window
 	border = "rounded", -- Floating window border style
 	max_payload_size = 10 * 1024 * 1024, -- Maximum payload size in bytes (10 MB)
+	syntax_highlight = false, -- Disable syntax parsing by default for pure plain-text speed
+	close_on_q = true, -- Map 'q' to close history window (in addition to <Esc>)
 	window = {
 		width = 0.88, -- Overall width ratio (0.0 to 1.0) or fixed integer column width
 		height = 0.60, -- Overall height ratio (0.0 to 1.0) or fixed integer row height
@@ -251,9 +253,13 @@ function M.open_history_window()
 		vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
 		vim.bo[preview_buf].modifiable = false
 
-		if type(entry) == "table" and entry.filetype and entry.filetype ~= "" then
+		if M.config.syntax_highlight and type(entry) == "table" and entry.filetype and entry.filetype ~= "" then
 			pcall(function()
 				vim.bo[preview_buf].filetype = entry.filetype
+			end)
+		else
+			pcall(function()
+				vim.bo[preview_buf].filetype = ""
 			end)
 		end
 
@@ -322,9 +328,13 @@ function M.open_history_window()
 		})
 	end
 
-	-- Keymap: 'q' and '<Esc>' to dismiss
-	vim.keymap.set("n", "q", close_all_windows, { buffer = list_buf, silent = true, nowait = true })
+	-- Keymap: '<Esc>' to dismiss (always enabled)
 	vim.keymap.set("n", "<Esc>", close_all_windows, { buffer = list_buf, silent = true, nowait = true })
+
+	-- Keymap: 'q' to dismiss (configurable via M.config.close_on_q)
+	if M.config.close_on_q ~= false then
+		vim.keymap.set("n", "q", close_all_windows, { buffer = list_buf, silent = true, nowait = true })
+	end
 
 	-- Keymap: 'd' / '<Del>' to delete selected item
 	local function delete_item()
@@ -409,19 +419,23 @@ function M.open_history_window()
 			vim.keymap.set("n", "<CR>", save_and_paste, { buffer = preview_buf, silent = true, nowait = true })
 			vim.keymap.set("n", "<C-s>", save_and_paste, { buffer = preview_buf, silent = true, nowait = true })
 
-			-- <Esc> or 'q' returns focus back to list window
-			vim.keymap.set("n", "q", function()
-				vim.bo[preview_buf].modifiable = false
-				if vim.api.nvim_win_is_valid(list_win) then
-					vim.api.nvim_set_current_win(list_win)
-				end
-			end, { buffer = preview_buf, silent = true, nowait = true })
+			-- <Esc> returns focus back to list window (always enabled)
 			vim.keymap.set("n", "<Esc>", function()
 				vim.bo[preview_buf].modifiable = false
 				if vim.api.nvim_win_is_valid(list_win) then
 					vim.api.nvim_set_current_win(list_win)
 				end
 			end, { buffer = preview_buf, silent = true, nowait = true })
+
+			-- 'q' returns focus back to list window (configurable)
+			if M.config.close_on_q ~= false then
+				vim.keymap.set("n", "q", function()
+					vim.bo[preview_buf].modifiable = false
+					if vim.api.nvim_win_is_valid(list_win) then
+						vim.api.nvim_set_current_win(list_win)
+					end
+				end, { buffer = preview_buf, silent = true, nowait = true })
+			end
 
 			vim.notify(
 				"Copy History: Edit mode active in preview. Press <CR> to save & paste, <Esc> to return.",

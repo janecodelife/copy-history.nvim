@@ -119,8 +119,38 @@ local function run_tests()
 	assert(#vim.api.nvim_list_wins() == 1, "Floating windows should close on <Esc>")
 	print("✓ Test 8 passed!")
 
+	print("Running Test 9: Zero-Treesitter / Plain Text Preview Mode...")
+	M_reloaded.config.syntax_highlight = false
+	M_reloaded.open_history_window()
+	local wins = vim.api.nvim_list_wins()
+	local preview_win_id = wins[2] or wins[1]
+	local prev_buf = vim.api.nvim_win_get_buf(preview_win_id)
+	assert(vim.bo[prev_buf].filetype == "", "Preview buffer filetype must remain blank in zero-treesitter mode")
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Windows should close on <Esc>")
+	print("✓ Test 9 passed!")
+
+	print("Running Test 10: Configurable 'q' Window Dismissal...")
+	-- When close_on_q = false: 'q' should NOT close window
+	M_reloaded.config.close_on_q = false
+	M_reloaded.open_history_window()
+	assert(#vim.api.nvim_list_wins() >= 2)
+	vim.api.nvim_feedkeys("q", "xt", false)
+	assert(#vim.api.nvim_list_wins() >= 2, "Window must stay open when close_on_q = false")
+	-- <Esc> must still close window
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Window must close on <Esc>")
+
+	-- When close_on_q = true: 'q' SHOULD close window
+	M_reloaded.config.close_on_q = true
+	M_reloaded.open_history_window()
+	assert(#vim.api.nvim_list_wins() >= 2)
+	vim.api.nvim_feedkeys("q", "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Window must close on 'q' when close_on_q = true")
+	print("✓ Test 10 passed!")
+
 	print("=========================================")
-	print("🎉 ALL 8 TEST SUITES COMPLETED SUCCESSFULLY!")
+	print("🎉 ALL 10 TEST SUITES COMPLETED SUCCESSFULLY!")
 	print("=========================================")
 end
 
