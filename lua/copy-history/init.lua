@@ -8,6 +8,15 @@ M.config = {
 	max_payload_size = 10 * 1024 * 1024, -- Maximum payload size in bytes (10 MB)
 	syntax_highlight = false, -- Disable syntax parsing by default for pure plain-text speed
 	close_on_q = true, -- Map 'q' to close history window (in addition to <Esc>)
+	keymaps = {
+		edit = { "e", "i" }, -- Keys to enter edit mode in preview
+		save_and_paste = "<C-s>", -- Key to save and paste from edit mode (works in Normal & Insert modes)
+		paste = "<CR>", -- Key to paste selected item after cursor (also 'p')
+		paste_before = "P", -- Key to paste selected item before cursor
+		delete = { "d", "<Del>" }, -- Keys to delete item from history
+		yank = "y", -- Key to yank selected item to register
+		close = "<Esc>", -- Key to close history window
+	},
 	window = {
 		width = 0.88, -- Overall width ratio (0.0 to 1.0) or fixed integer column width
 		height = 0.60, -- Overall height ratio (0.0 to 1.0) or fixed integer row height
@@ -369,15 +378,29 @@ function M.open_history_window()
 		})
 	end
 
-	-- Keymap: '<Esc>' to dismiss (always enabled)
-	vim.keymap.set("n", "<Esc>", close_all_windows, { buffer = list_buf, silent = true, nowait = true })
-
-	-- Keymap: 'q' to dismiss (configurable via M.config.close_on_q)
-	if M.config.close_on_q ~= false then
-		vim.keymap.set("n", "q", close_all_windows, { buffer = list_buf, silent = true, nowait = true })
+	-- Helper function to map single key or list of keys
+	local function map_keys(mode, keys, callback, buf)
+		if type(keys) == "table" then
+			for _, k in ipairs(keys) do
+				vim.keymap.set(mode, k, callback, { buffer = buf, silent = true, nowait = true })
+			end
+		elseif type(keys) == "string" and keys ~= "" then
+			vim.keymap.set(mode, keys, callback, { buffer = buf, silent = true, nowait = true })
+		end
 	end
 
-	-- Keymap: 'd' / '<Del>' to delete selected item
+	local cfg_keys = M.config.keymaps or {}
+
+	-- Dismiss / Close window mappings
+	local close_keys = cfg_keys.close or "<Esc>"
+	map_keys("n", close_keys, close_all_windows, list_buf)
+
+	-- Configurable 'q' dismissal
+	if M.config.close_on_q ~= false then
+		map_keys("n", "q", close_all_windows, list_buf)
+	end
+
+	-- Delete selected item
 	local function delete_item()
 		if #M.history == 0 then
 			return
@@ -387,11 +410,10 @@ function M.open_history_window()
 		M.save_history()
 		refresh_list_and_preview()
 	end
-	vim.keymap.set("n", "d", delete_item, { buffer = list_buf, silent = true, nowait = true })
-	vim.keymap.set("n", "<Del>", delete_item, { buffer = list_buf, silent = true, nowait = true })
+	map_keys("n", cfg_keys.delete or { "d", "<Del>" }, delete_item, list_buf)
 
-	-- Keymap: 'y' to yank selected item to register without closing/pasting
-	vim.keymap.set("n", "y", function()
+	-- Yank selected item to register without closing
+	map_keys("n", cfg_keys.yank or "y", function()
 		if #M.history == 0 then
 			return
 		end
@@ -402,7 +424,7 @@ function M.open_history_window()
 			pcall(vim.fn.setreg, "+", text)
 			vim.notify("Copy History: Yanked entry to clipboard!", vim.log.levels.INFO)
 		end
-	end, { buffer = list_buf, silent = true, nowait = true })
+	end, list_buf)
 
 	-- Paste handler helper (character-wise insertion)
 	local function paste_selected(paste_after)
@@ -417,22 +439,23 @@ function M.open_history_window()
 		end
 	end
 
-	-- Keymap: '<CR>' and 'p' to paste after cursor
-	vim.keymap.set("n", "<CR>", function()
+	-- Paste keymaps
+	map_keys("n", cfg_keys.paste or "<CR>", function()
 		paste_selected(true)
-	end, { buffer = list_buf, silent = true, nowait = true })
-	vim.keymap.set("n", "p", function()
-		paste_selected(true)
-	end, { buffer = list_buf, silent = true, nowait = true })
+	end, list_buf)
+	if cfg_keys.paste ~= "p" then
+		map_keys("n", "p", function()
+			paste_selected(true)
+		end, list_buf)
+	end
 
-	-- Keymap: 'P' to paste before cursor
-	vim.keymap.set("n", "P", function()
+	map_keys("n", cfg_keys.paste_before or "P", function()
 		paste_selected(false)
-	end, { buffer = list_buf, silent = true, nowait = true })
+	end, list_buf)
 
-	-- Keymap: 'e' for Edit Mode in preview window
+	-- Edit Mode in preview window
 	if show_preview and preview_buf and preview_win then
-		vim.keymap.set("n", "e", function()
+		local function enter_edit_mode()
 			if #M.history == 0 then
 				return
 			end
@@ -440,7 +463,20 @@ function M.open_history_window()
 			vim.api.nvim_set_current_win(preview_win)
 			vim.bo[preview_buf].modifiable = true
 
-			-- In edit mode: <CR> or <C-s> applies modifications and pastes
+			local orig_title = get_preview_title(
+				(type(M.history[cur_idx]) == "table" and M.history[cur_idx].file) or "Snippet",
+				(type(M.history[cur_idx]) == "table" and M.history[cur_idx].line) or 1,
+				preview_width
+			)
+
+			-- Display responsive edit mode indicator in preview border
+			pcall(vim.api.nvim_win_set_config, preview_win, {
+				title = preview_width >= 40 and " 󰏫 Edit Mode (<C-s>: Save & Paste | <Esc>: Done) "
+					or " 󰏫 Edit Mode ",
+				title_pos = "center",
+			})
+
+			-- In edit mode: save modifications and paste directly into buffer
 			local function save_and_paste()
 				local modified_lines = vim.api.nvim_buf_get_lines(preview_buf, 0, -1, false)
 				local modified_text = table.concat(modified_lines, "\n")
@@ -457,32 +493,78 @@ function M.open_history_window()
 				end
 			end
 
-			vim.keymap.set("n", "<CR>", save_and_paste, { buffer = preview_buf, silent = true, nowait = true })
-			vim.keymap.set("n", "<C-s>", save_and_paste, { buffer = preview_buf, silent = true, nowait = true })
+			-- Auto-sync changes back into history and return focus to list window
+			local function sync_and_return()
+				local modified_lines = vim.api.nvim_buf_get_lines(preview_buf, 0, -1, false)
+				local modified_text = table.concat(modified_lines, "\n")
+				if type(M.history[cur_idx]) == "table" then
+					M.history[cur_idx].text = modified_text
+					M.history[cur_idx].line_count = #modified_lines
+				else
+					M.history[cur_idx] = modified_text
+				end
+				M.save_history()
 
-			-- <Esc> returns focus back to list window (always enabled)
-			vim.keymap.set("n", "<Esc>", function()
+				-- Refresh list window display so the edited preview snippet is shown
+				vim.bo[list_buf].modifiable = true
+				vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, render_display_lines())
+				vim.bo[list_buf].modifiable = false
+
 				vim.bo[preview_buf].modifiable = false
+				pcall(vim.api.nvim_win_set_config, preview_win, {
+					title = orig_title,
+					title_pos = "center",
+				})
+
 				if vim.api.nvim_win_is_valid(list_win) then
 					vim.api.nvim_set_current_win(list_win)
 				end
-			end, { buffer = preview_buf, silent = true, nowait = true })
+			end
 
-			-- 'q' returns focus back to list window (configurable)
+			-- Bind save_and_paste in BOTH Normal mode and Insert mode!
+			local save_keys = cfg_keys.save_and_paste or "<C-s>"
+			map_keys("n", save_keys, save_and_paste, preview_buf)
+			map_keys("i", save_keys, save_and_paste, preview_buf)
+			-- Also map <CR> in normal mode to save & paste
+			vim.keymap.set("n", "<CR>", save_and_paste, { buffer = preview_buf, silent = true, nowait = true })
+
+			-- <Esc> in Normal mode syncs edits and returns focus to list window
+			vim.keymap.set("n", "<Esc>", sync_and_return, { buffer = preview_buf, silent = true, nowait = true })
+
+			-- 'q' in Normal mode returns focus back to list window (if close_on_q enabled)
 			if M.config.close_on_q ~= false then
-				vim.keymap.set("n", "q", function()
-					vim.bo[preview_buf].modifiable = false
-					if vim.api.nvim_win_is_valid(list_win) then
-						vim.api.nvim_set_current_win(list_win)
-					end
-				end, { buffer = preview_buf, silent = true, nowait = true })
+				vim.keymap.set("n", "q", sync_and_return, { buffer = preview_buf, silent = true, nowait = true })
 			end
 
 			vim.notify(
-				"Copy History: Edit mode active in preview. Press <CR> to save & paste, <Esc> to return.",
+				"Copy History: Edit mode active. Press <C-s> or <CR> to save & paste, <Esc> to return.",
 				vim.log.levels.INFO
 			)
-		end, { buffer = list_buf, silent = true, nowait = true })
+		end
+
+		-- Map edit keys in list window (default 'e' and 'i')
+		map_keys("n", cfg_keys.edit or { "e", "i" }, enter_edit_mode, list_buf)
+
+		-- Protect preview buffer when focused in read-only mode:
+		-- Pressing i, a, o, or e enters edit mode automatically instead of triggering E21
+		local function on_preview_input(action)
+			return function()
+				if not vim.bo[preview_buf].modifiable then
+					enter_edit_mode()
+					if action == "i" then
+						vim.cmd("startinsert")
+					elseif action == "a" then
+						vim.cmd("startinsert!")
+					elseif action == "o" then
+						vim.api.nvim_feedkeys("o", "n", false)
+					end
+				end
+			end
+		end
+		vim.keymap.set("n", "i", on_preview_input("i"), { buffer = preview_buf, silent = true, nowait = true })
+		vim.keymap.set("n", "a", on_preview_input("a"), { buffer = preview_buf, silent = true, nowait = true })
+		vim.keymap.set("n", "o", on_preview_input("o"), { buffer = preview_buf, silent = true, nowait = true })
+		vim.keymap.set("n", "e", on_preview_input("e"), { buffer = preview_buf, silent = true, nowait = true })
 	end
 end
 

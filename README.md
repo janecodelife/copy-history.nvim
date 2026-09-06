@@ -6,9 +6,12 @@
 A lightweight, high-performance, and minimalist clipboard history manager for Neovim. It automatically tracks everything you copy (yank) and lets you recall and paste it instantly via a floating window in a blink That Support Single Lines  And Mutiple Lines.
 
 ## ✨ Features
-- **Zero Dependencies:** Written purely in Lua, running 100% locally with zero external requirements.
+- **Zero Dependencies & Zero-Treesitter Required:** Written purely in Lua and native Neovim C-APIs, running 100% locally. Tree-sitter is strictly optional for syntax colors and never required for previewing or live editing.
+- **Side-by-Side Synchronized Preview:** Live preview window updating in real-time as you navigate recent snippets.
+- **Live In-Preview Editing:** Edit text snippets directly in the preview window before pasting (`e` or `i`), with `<C-s>` to save & paste in both Normal and Insert modes.
 - **Duplicate Prevention:** Automatically removes older duplicate text snippets to keep your history clean.
-- **Support Single And Mutiple Lines:** Support And Working with single and multiple lines
+- **Support Single And Multiple Lines:** Support and working with single and multiple lines.
+- **Per-Directory Persistence:** History is stored cleanly per workspace/directory in Neovim data storage.
 
 ---
 
@@ -23,14 +26,36 @@ vim.pack.add({
 	"https://github.com/janecodelife/copy-history.nvim",
 })
 
-
--- Initialize and configure the plugin
+-- Initialize with minimal zero-treesitter defaults
 require("copy-history").setup({
     keymap = "<leader>ch",  -- Hotkey combination to open the viewer window
     max_history = 10,       -- Number of copied text snippets to remember
 })
 ```
 
+### Full Configuration (Optional)
+```lua
+require("copy-history").setup({
+    keymap = "<leader>ch",              -- Global keymap to open history window
+    max_history = 10,                   -- Max copied snippets to store
+    syntax_highlight = false,           -- false: fast zero-treesitter plain-text | true: tree-sitter colors
+    close_on_q = true,                  -- Map 'q' to close history window (in addition to <Esc>)
+    keymaps = {
+        edit = { "e", "i" },            -- Enter preview edit mode
+        save_and_paste = "<C-s>",       -- Save & paste from edit mode (Normal & Insert mode)
+        paste = "<CR>",                 -- Paste after cursor (also 'p')
+        paste_before = "P",             -- Paste before cursor
+        delete = { "d", "<Del>" },      -- Delete item from history
+        yank = "y",                     -- Yank item to clipboard
+        close = "<Esc>",                -- Dismiss window
+    },
+    window = {
+        width = 0.88,                   -- Window width ratio (88%)
+        height = 0.60,                  -- Window height ratio (60%)
+        preview_ratio = 0.55,           -- Preview window width ratio (55%)
+    },
+})
+```
 
 ## Demo Video 📺
 
@@ -40,14 +65,20 @@ require("copy-history").setup({
 
 ---
 
-
 ## 🚀 Usage
 
 1. Go about your normal coding routine and copy text snippets using regular Neovim operators (e.g., `yy`, `yw`, `viw+y`).
 2. Whenever you want to paste something from your history, press **`<leader>ch`** (Space + c + h by default) in **Normal Mode**.
-3. A centered floating window will open showing your recent copy history snippets.
-4. **Navigate** up/down the list, then press **`Enter`** on any line to automatically close the window and paste that text right after your cursor!
-5. To close the picker menu without pasting anything, press **`q`**, press **`<Esc>`**, or simply switch focus away from the window.
+3. A centered floating window will open showing your recent copy history snippets alongside a synchronized preview pane.
+4. **Interactive Keybindings**:
+   - **`Enter`** / **`p`**: Paste the selected snippet after your cursor.
+   - **`P`**: Paste the selected snippet before your cursor.
+   - **`e`** or **`i`**: Enter **Edit Mode** in the preview window to modify the snippet before pasting.
+     - While editing: Press **`<C-s>`** (in either Normal or Insert mode) or **`<CR>`** (Normal mode) to save & paste immediately!
+     - Press **`<Esc>`** in Normal mode to auto-sync your edits and return focus to the list.
+   - **`y`**: Yank selected snippet to system clipboard without pasting.
+   - **`d`** / **`<Del>`**: Remove selected snippet from history.
+   - **`q`** / **`<Esc>`**: Dismiss the window without pasting.
 
 --- 
 

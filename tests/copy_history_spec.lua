@@ -149,8 +149,70 @@ local function run_tests()
 	assert(#vim.api.nvim_list_wins() == 1, "Window must close on 'q' when close_on_q = true")
 	print("✓ Test 10 passed!")
 
+	print("Running Test 11: Insert-mode <C-s> Save & Paste...")
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "target line" })
+	M_reloaded.open_history_window()
+	-- Press 'e' to enter edit mode
+	vim.api.nvim_feedkeys("e", "xt", false)
+	local prev_win = vim.api.nvim_get_current_win()
+	local prev_buf = vim.api.nvim_win_get_buf(prev_win)
+	-- Make modifications in preview buffer
+	vim.api.nvim_buf_set_lines(prev_buf, 0, -1, false, { "insert mode saved snippet" })
+	-- Send <C-s> to save & paste
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-s>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Windows should close on <C-s>")
+	local target_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+	assert(target_lines[1]:find("insert mode saved snippet") ~= nil, "Target buffer should contain <C-s> saved content")
+	print("✓ Test 11 passed!")
+
+	print("Running Test 12: Auto-sync on <Esc> return to list...")
+	M_reloaded.open_history_window()
+	-- Press 'e' to enter edit mode
+	vim.api.nvim_feedkeys("e", "xt", false)
+	prev_win = vim.api.nvim_get_current_win()
+	prev_buf = vim.api.nvim_win_get_buf(prev_win)
+	vim.api.nvim_buf_set_lines(prev_buf, 0, -1, false, { "auto synced edit" })
+	-- Press <Esc> to return to list
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() >= 2, "Window must stay open when returning to list via <Esc>")
+	assert(M_reloaded.get_entry_text(M_reloaded.history[1]) == "auto synced edit", "History entry should be updated on <Esc>")
+	-- Now press <CR> from list window to paste
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Windows should close on <CR>")
+	target_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+	assert(target_lines[1]:find("auto synced edit") ~= nil, "Pasted content must be the auto-synced edit")
+	print("✓ Test 12 passed!")
+
+	print("Running Test 13: E21 Protection on Intuitive Editing Keys ('i')...")
+	M_reloaded.open_history_window()
+	-- Press 'i' from list window: should enter edit mode without E21
+	vim.v.errmsg = ""
+	vim.api.nvim_feedkeys("i", "xt", false)
+	assert(vim.v.errmsg == "", "Pressing 'i' should not trigger E21 error: " .. vim.v.errmsg)
+	prev_win = vim.api.nvim_get_current_win()
+	prev_buf = vim.api.nvim_win_get_buf(prev_win)
+	assert(vim.bo[prev_buf].modifiable == true, "Preview buffer should become modifiable on 'i'")
+	-- Return to list and close
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Windows should close on <Esc>")
+	print("✓ Test 13 passed!")
+
+	print("Running Test 14: Configurable Keymaps Table...")
+	M_reloaded.config.keymaps = {
+		edit = "E",
+		paste = "<C-p>",
+		close = "<C-c>",
+	}
+	M_reloaded.open_history_window()
+	assert(#vim.api.nvim_list_wins() >= 2)
+	-- Close via configured <C-c>
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-c>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Window should close on custom key <C-c>")
+	print("✓ Test 14 passed!")
+
 	print("=========================================")
-	print("🎉 ALL 10 TEST SUITES COMPLETED SUCCESSFULLY!")
+	print("🎉 ALL 14 TEST SUITES COMPLETED SUCCESSFULLY!")
 	print("=========================================")
 end
 
