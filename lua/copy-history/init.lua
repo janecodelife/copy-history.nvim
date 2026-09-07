@@ -10,7 +10,7 @@ M.config = {
 	close_on_q = true, -- Map 'q' to close history window (in addition to <Esc>)
 	keymaps = {
 		edit = { "e", "i" }, -- Keys to enter edit mode in preview
-		save_and_paste = "<C-s>", -- Key to save and paste from edit mode (works in Normal & Insert modes)
+		save = "<C-s>", -- Key to save modifications without closing window (Normal & Insert modes)
 		paste = "<CR>", -- Key to paste selected item after cursor (also 'p')
 		paste_before = "P", -- Key to paste selected item before cursor
 		delete = { "d", "<Del>" }, -- Keys to delete item from history
@@ -703,8 +703,8 @@ function M.open_history_window()
 
 		echo_notice("Recent changes have been saved!")
 	end
-	map_keys("n", cfg_keys.save or "<C-s>", save_only, preview_buf)
-	map_keys("i", cfg_keys.save or "<C-s>", save_only, preview_buf)
+	map_keys("n", cfg_keys.save or cfg_keys.save_and_paste or "<C-s>", save_only, preview_buf)
+	map_keys("i", cfg_keys.save or cfg_keys.save_and_paste or "<C-s>", save_only, preview_buf)
 
 	-- Paste & Exit (<CR>) in Normal mode: saves edits, closes window, and pastes into code buffer
 	local function save_and_paste()
