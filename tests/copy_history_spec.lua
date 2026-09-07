@@ -149,7 +149,7 @@ local function run_tests()
 	assert(#vim.api.nvim_list_wins() == 1, "Window must close on 'q' when close_on_q = true")
 	print("✓ Test 10 passed!")
 
-	print("Running Test 11: Insert-mode <C-s> Save & Paste...")
+	print("Running Test 11: Pure Save (<C-s>) in Preview Buffer (Normal & Insert Mode)...")
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "target line" })
 	M_reloaded.open_history_window()
 	-- Press 'e' to enter edit mode
@@ -157,12 +157,16 @@ local function run_tests()
 	local prev_win = vim.api.nvim_get_current_win()
 	local prev_buf = vim.api.nvim_win_get_buf(prev_win)
 	-- Make modifications in preview buffer
-	vim.api.nvim_buf_set_lines(prev_buf, 0, -1, false, { "insert mode saved snippet" })
-	-- Send <C-s> to save & paste
+	vim.api.nvim_buf_set_lines(prev_buf, 0, -1, false, { "pure save snippet" })
+	-- Send <C-s> to save without closing
 	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-s>", true, false, true), "xt", false)
-	assert(#vim.api.nvim_list_wins() == 1, "Windows should close on <C-s>")
+	assert(#vim.api.nvim_list_wins() >= 2, "Windows should stay open on <C-s>")
+	assert(M_reloaded.get_entry_text(M_reloaded.history[1]) == "pure save snippet", "History should be updated on disk/memory on <C-s>")
+	-- Now press <CR> to save & paste
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Windows should close on <CR>")
 	local target_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-	assert(target_lines[1]:find("insert mode saved snippet") ~= nil, "Target buffer should contain <C-s> saved content")
+	assert(target_lines[1]:find("pure save snippet") ~= nil, "Target buffer should contain pasted content")
 	print("✓ Test 11 passed!")
 
 	print("Running Test 12: Auto-sync on <Esc> return to list...")
@@ -214,8 +218,15 @@ local function run_tests()
 	print("Running Test 15: Mouse / WinEnter Auto-Promotion to Modifiable (Zero E21)...")
 	M_reloaded.config.keymaps = nil
 	M_reloaded.open_history_window()
-	local wins = vim.api.nvim_list_wins()
-	local prev_win = wins[2] or wins[1]
+	local l_win = vim.api.nvim_get_current_win()
+	local prev_win = nil
+	for _, w in ipairs(vim.api.nvim_list_wins()) do
+		if w ~= l_win and vim.bo[vim.api.nvim_win_get_buf(w)].buftype == "nofile" then
+			prev_win = w
+			break
+		end
+	end
+	assert(prev_win ~= nil, "Preview window must be open")
 	local prev_buf = vim.api.nvim_win_get_buf(prev_win)
 	-- Move directly into preview window (simulating mouse click or window navigation)
 	vim.v.errmsg = ""
@@ -251,8 +262,55 @@ local function run_tests()
 	assert(table.concat(target_content, "\n"):find("zero-treesitter edited content", 1, true) ~= nil, "Target buffer must contain the edited content without treesitter")
 	print("✓ Test 16 passed!")
 
+	print("Running Test 17: Multi-Paste & Stay Open ('P')...")
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "initial" })
+	M_reloaded.open_history_window()
+	-- In list window, press 'P' to multi-paste
+	vim.api.nvim_feedkeys("P", "xt", false)
+	assert(#vim.api.nvim_list_wins() >= 2, "Windows must remain open after multi-paste 'P'")
+	local buf_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+	assert(#buf_lines >= 2, "Buffer should have received pasted content")
+	-- Now enter edit mode and press 'P'
+	vim.api.nvim_feedkeys("e", "xt", false)
+	local edit_win = vim.api.nvim_get_current_win()
+	local edit_buf = vim.api.nvim_win_get_buf(edit_win)
+	vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, { "snippet via P" })
+	vim.api.nvim_feedkeys("P", "xt", false)
+	assert(#vim.api.nvim_list_wins() >= 2, "Windows must remain open after multi-paste 'P' in edit mode")
+	-- Close window
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Windows should close on <Esc>")
+	print("✓ Test 17 passed!")
+
+	print("Running Test 18: Responsive Small-Screen Single-Pane Buffer Swapping...")
+	local orig_cols = vim.o.columns
+	vim.o.columns = 60
+	M_reloaded.open_history_window()
+	-- On screen < 75 cols, only single list window opens
+	assert(#vim.api.nvim_list_wins() == 2, "Only 1 floating list window should open on small screen (total 2 wins)")
+	local list_win_id = vim.api.nvim_get_current_win()
+	local l_buf = vim.api.nvim_win_get_buf(list_win_id)
+	-- Press 'e' to swap to preview/edit buffer
+	vim.api.nvim_feedkeys("e", "xt", false)
+	local swapped_buf = vim.api.nvim_win_get_buf(list_win_id)
+	assert(swapped_buf ~= l_buf, "Window buffer must swap to preview buffer on 'e'")
+	assert(vim.bo[swapped_buf].modifiable == true, "Swapped edit buffer must be modifiable")
+	-- Edit text and save via <C-s>
+	vim.api.nvim_buf_set_lines(swapped_buf, 0, -1, false, { "small screen edit" })
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-s>", true, false, true), "xt", false)
+	assert(M_reloaded.get_entry_text(M_reloaded.history[1]) == "small screen edit", "History must update on <C-s>")
+	-- Press <Esc> to swap back to list_buf
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(vim.api.nvim_win_get_buf(list_win_id) == l_buf, "Window buffer must swap back to list buffer on <Esc>")
+	-- Press <Esc> again to close the window
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Window should be closed on second <Esc>")
+	vim.o.columns = orig_cols
+	print("✓ Test 18 passed!")
+
 	print("=========================================")
-	print("🎉 ALL 16 TEST SUITES COMPLETED SUCCESSFULLY!")
+	print("🎉 ALL 18 TEST SUITES COMPLETED SUCCESSFULLY!")
 	print("=========================================")
 end
 
