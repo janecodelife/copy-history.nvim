@@ -315,10 +315,48 @@ function M.open_history_window()
 
 		local title_file = (type(entry) == "table" and entry.file) or "Snippet"
 		local title_line = (type(entry) == "table" and entry.line) or 1
+		orig_preview_title = get_preview_title(title_file, title_line, preview_width)
 		pcall(vim.api.nvim_win_set_config, preview_win, {
-			title = get_preview_title(title_file, title_line, preview_width),
+			title = orig_preview_title,
 			title_pos = "center",
 		})
+	end
+
+	local cur_edit_idx = nil
+
+	-- Synchronize preview buffer contents back into M.history
+	local function sync_preview_to_history()
+		if not show_preview or not preview_buf or not vim.api.nvim_buf_is_valid(preview_buf) then
+			return
+		end
+		local idx = cur_edit_idx
+		if not idx or not M.history[idx] then
+			if vim.api.nvim_win_is_valid(list_win) then
+				idx = vim.api.nvim_win_get_cursor(list_win)[1]
+			else
+				idx = 1
+			end
+		end
+		if not M.history[idx] then
+			return
+		end
+
+		local modified_lines = vim.api.nvim_buf_get_lines(preview_buf, 0, -1, false)
+		local modified_text = table.concat(modified_lines, "\n")
+		if type(M.history[idx]) == "table" then
+			M.history[idx].text = modified_text
+			M.history[idx].line_count = #modified_lines
+		else
+			M.history[idx] = modified_text
+		end
+		M.save_history()
+
+		-- Refresh list window display so the edited snippet is immediately reflected
+		if vim.api.nvim_buf_is_valid(list_buf) then
+			vim.bo[list_buf].modifiable = true
+			vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, render_display_lines())
+			vim.bo[list_buf].modifiable = false
+		end
 	end
 
 	-- Initial preview update
@@ -330,6 +368,10 @@ function M.open_history_window()
 		callback = function()
 			if vim.api.nvim_win_is_valid(list_win) then
 				local cur_line = vim.api.nvim_win_get_cursor(list_win)[1]
+				if show_preview and preview_buf and vim.bo[preview_buf].modifiable then
+					sync_preview_to_history()
+					vim.bo[preview_buf].modifiable = false
+				end
 				update_preview(cur_line)
 			end
 		end,
@@ -374,7 +416,19 @@ function M.open_history_window()
 	if preview_buf then
 		vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
 			buffer = preview_buf,
-			callback = on_leave,
+			callback = function()
+				if vim.bo[preview_buf].modifiable then
+					sync_preview_to_history()
+					vim.bo[preview_buf].modifiable = false
+					if orig_preview_title and vim.api.nvim_win_is_valid(preview_win) then
+						pcall(vim.api.nvim_win_set_config, preview_win, {
+							title = orig_preview_title,
+							title_pos = "center",
+						})
+					end
+				end
+				on_leave()
+			end,
 		})
 	end
 
@@ -431,6 +485,9 @@ function M.open_history_window()
 		if #M.history == 0 then
 			return
 		end
+		if show_preview and preview_buf and vim.bo[preview_buf].modifiable then
+			sync_preview_to_history()
+		end
 		local cur = vim.api.nvim_win_get_cursor(list_win)[1]
 		local text = M.get_entry_text(M.history[cur])
 		close_all_windows()
@@ -439,7 +496,7 @@ function M.open_history_window()
 		end
 	end
 
-	-- Paste keymaps
+	-- Paste keymaps in list window
 	map_keys("n", cfg_keys.paste or "<CR>", function()
 		paste_selected(true)
 	end, list_buf)
@@ -453,17 +510,47 @@ function M.open_history_window()
 		paste_selected(false)
 	end, list_buf)
 
+	-- Mouse interactions in list window: single click selects, double click pastes
+	vim.keymap.set("n", "<LeftMouse>", function()
+		local mouse = vim.fn.getmousepos()
+		if mouse and mouse.winid == list_win and mouse.line <= #M.history and mouse.line >= 1 then
+			pcall(vim.api.nvim_win_set_cursor, list_win, { mouse.line, 0 })
+			if show_preview and preview_buf and vim.bo[preview_buf].modifiable then
+				sync_preview_to_history()
+				vim.bo[preview_buf].modifiable = false
+			end
+			update_preview(mouse.line)
+		end
+	end, { buffer = list_buf, silent = true, nowait = true })
+
+	vim.keymap.set("n", "<2-LeftMouse>", function()
+		local mouse = vim.fn.getmousepos()
+		if mouse and mouse.winid == list_win and mouse.line <= #M.history and mouse.line >= 1 then
+			pcall(vim.api.nvim_win_set_cursor, list_win, { mouse.line, 0 })
+			paste_selected(true)
+		end
+	end, { buffer = list_buf, silent = true, nowait = true })
+
 	-- Edit Mode in preview window
 	if show_preview and preview_buf and preview_win then
 		local function enter_edit_mode()
 			if #M.history == 0 then
 				return
 			end
-			local cur_idx = vim.api.nvim_win_get_cursor(list_win)[1]
-			vim.api.nvim_set_current_win(preview_win)
+			local cur_idx = cur_edit_idx
+			if vim.api.nvim_win_is_valid(list_win) then
+				cur_idx = vim.api.nvim_win_get_cursor(list_win)[1]
+			end
+			if not cur_idx or cur_idx > #M.history or cur_idx < 1 then
+				cur_idx = 1
+			end
+			cur_edit_idx = cur_idx
+			if vim.api.nvim_win_is_valid(preview_win) and vim.api.nvim_get_current_win() ~= preview_win then
+				vim.api.nvim_set_current_win(preview_win)
+			end
 			vim.bo[preview_buf].modifiable = true
 
-			local orig_title = get_preview_title(
+			orig_preview_title = get_preview_title(
 				(type(M.history[cur_idx]) == "table" and M.history[cur_idx].file) or "Snippet",
 				(type(M.history[cur_idx]) == "table" and M.history[cur_idx].line) or 1,
 				preview_width
@@ -478,41 +565,21 @@ function M.open_history_window()
 
 			-- In edit mode: save modifications and paste directly into buffer
 			local function save_and_paste()
-				local modified_lines = vim.api.nvim_buf_get_lines(preview_buf, 0, -1, false)
-				local modified_text = table.concat(modified_lines, "\n")
-				if type(M.history[cur_idx]) == "table" then
-					M.history[cur_idx].text = modified_text
-					M.history[cur_idx].line_count = #modified_lines
-				else
-					M.history[cur_idx] = modified_text
-				end
-				M.save_history()
+				sync_preview_to_history()
+				local cur = cur_edit_idx or vim.api.nvim_win_get_cursor(list_win)[1]
+				local text = M.get_entry_text(M.history[cur])
 				close_all_windows()
-				if modified_text ~= "" then
-					vim.api.nvim_put(modified_lines, "c", true, true)
+				if text and text ~= "" then
+					vim.api.nvim_put(vim.split(text, "\n"), "c", true, true)
 				end
 			end
 
 			-- Auto-sync changes back into history and return focus to list window
 			local function sync_and_return()
-				local modified_lines = vim.api.nvim_buf_get_lines(preview_buf, 0, -1, false)
-				local modified_text = table.concat(modified_lines, "\n")
-				if type(M.history[cur_idx]) == "table" then
-					M.history[cur_idx].text = modified_text
-					M.history[cur_idx].line_count = #modified_lines
-				else
-					M.history[cur_idx] = modified_text
-				end
-				M.save_history()
-
-				-- Refresh list window display so the edited preview snippet is shown
-				vim.bo[list_buf].modifiable = true
-				vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, render_display_lines())
-				vim.bo[list_buf].modifiable = false
-
+				sync_preview_to_history()
 				vim.bo[preview_buf].modifiable = false
 				pcall(vim.api.nvim_win_set_config, preview_win, {
-					title = orig_title,
+					title = orig_preview_title,
 					title_pos = "center",
 				})
 
@@ -535,36 +602,62 @@ function M.open_history_window()
 			if M.config.close_on_q ~= false then
 				vim.keymap.set("n", "q", sync_and_return, { buffer = preview_buf, silent = true, nowait = true })
 			end
-
-			vim.notify(
-				"Copy History: Edit mode active. Press <C-s> or <CR> to save & paste, <Esc> to return.",
-				vim.log.levels.INFO
-			)
 		end
 
 		-- Map edit keys in list window (default 'e' and 'i')
 		map_keys("n", cfg_keys.edit or { "e", "i" }, enter_edit_mode, list_buf)
 
 		-- Protect preview buffer when focused in read-only mode:
-		-- Pressing i, a, o, or e enters edit mode automatically instead of triggering E21
+		-- Pressing any editing key enters edit mode automatically without triggering E21
 		local function on_preview_input(action)
 			return function()
 				if not vim.bo[preview_buf].modifiable then
 					enter_edit_mode()
-					if action == "i" then
-						vim.cmd("startinsert")
-					elseif action == "a" then
-						vim.cmd("startinsert!")
-					elseif action == "o" then
-						vim.api.nvim_feedkeys("o", "n", false)
-					end
+				end
+				if action == "i" then
+					vim.cmd("startinsert")
+				elseif action == "a" then
+					vim.cmd("startinsert!")
+				elseif action == "I" then
+					vim.cmd("startinsert")
+					vim.cmd("normal! ^")
+				elseif action == "A" then
+					vim.cmd("startinsert!")
+				elseif action == "o" then
+					vim.api.nvim_feedkeys("o", "n", false)
+				elseif action == "O" then
+					vim.api.nvim_feedkeys("O", "n", false)
+				elseif action == "c" or action == "C" or action == "s" or action == "S" then
+					vim.api.nvim_feedkeys(action, "n", false)
 				end
 			end
 		end
-		vim.keymap.set("n", "i", on_preview_input("i"), { buffer = preview_buf, silent = true, nowait = true })
-		vim.keymap.set("n", "a", on_preview_input("a"), { buffer = preview_buf, silent = true, nowait = true })
-		vim.keymap.set("n", "o", on_preview_input("o"), { buffer = preview_buf, silent = true, nowait = true })
-		vim.keymap.set("n", "e", on_preview_input("e"), { buffer = preview_buf, silent = true, nowait = true })
+
+		local edit_keys = { "i", "a", "o", "O", "c", "C", "s", "S", "I", "A", "e" }
+		for _, k in ipairs(edit_keys) do
+			vim.keymap.set("n", k, on_preview_input(k), { buffer = preview_buf, silent = true, nowait = true })
+		end
+
+		-- Mouse click on preview buffer enters edit mode and positions cursor
+		vim.keymap.set("n", "<LeftMouse>", function()
+			if not vim.bo[preview_buf].modifiable then
+				enter_edit_mode()
+			end
+			local mouse = vim.fn.getmousepos()
+			if mouse and mouse.winid == preview_win then
+				pcall(vim.api.nvim_win_set_cursor, preview_win, { mouse.line, math.max(0, mouse.column - 1) })
+			end
+		end, { buffer = preview_buf, silent = true, nowait = true })
+
+		-- Auto-promote to modifiable on WinEnter
+		vim.api.nvim_create_autocmd("WinEnter", {
+			buffer = preview_buf,
+			callback = function()
+				if vim.api.nvim_win_is_valid(list_win) and not vim.bo[preview_buf].modifiable then
+					enter_edit_mode()
+				end
+			end,
+		})
 	end
 end
 

@@ -211,8 +211,48 @@ local function run_tests()
 	assert(#vim.api.nvim_list_wins() == 1, "Window should close on custom key <C-c>")
 	print("✓ Test 14 passed!")
 
+	print("Running Test 15: Mouse / WinEnter Auto-Promotion to Modifiable (Zero E21)...")
+	M_reloaded.config.keymaps = nil
+	M_reloaded.open_history_window()
+	local wins = vim.api.nvim_list_wins()
+	local prev_win = wins[2] or wins[1]
+	local prev_buf = vim.api.nvim_win_get_buf(prev_win)
+	-- Move directly into preview window (simulating mouse click or window navigation)
+	vim.v.errmsg = ""
+	vim.api.nvim_set_current_win(prev_win)
+	assert(vim.v.errmsg == "", "Entering preview must not trigger errors: " .. vim.v.errmsg)
+	assert(vim.bo[prev_buf].modifiable == true, "Preview buffer must automatically become modifiable on enter")
+	-- Close windows
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Windows should close on <Esc>")
+	print("✓ Test 15 passed!")
+
+	print("Running Test 16: Zero-Treesitter Edit Before Click to Paste...")
+	M_reloaded.config.syntax_highlight = false
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "initial line" })
+	M_reloaded.open_history_window()
+	local l_win = vim.api.nvim_get_current_win()
+	-- Switch into preview window (simulating mouse click or 'e')
+	vim.api.nvim_feedkeys("e", "xt", false)
+	local p_win = vim.api.nvim_get_current_win()
+	local p_buf = vim.api.nvim_win_get_buf(p_win)
+	assert(vim.bo[p_buf].filetype == "", "Preview filetype must remain plain-text without treesitter")
+	assert(vim.bo[p_buf].modifiable == true, "Preview buffer must be modifiable")
+	-- Modify preview text
+	vim.api.nvim_buf_set_lines(p_buf, 0, -1, false, { "zero-treesitter edited content" })
+	-- Click / focus back to list window
+	vim.api.nvim_set_current_win(l_win)
+	assert(M_reloaded.get_entry_text(M_reloaded.history[1]) == "zero-treesitter edited content", "Edits must auto-sync back to history on focus change")
+	-- Paste via <CR> from list window
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Windows must close after paste")
+	local target_content = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+	assert(table.concat(target_content, "\n"):find("zero-treesitter edited content", 1, true) ~= nil, "Target buffer must contain the edited content without treesitter")
+	print("✓ Test 16 passed!")
+
 	print("=========================================")
-	print("🎉 ALL 14 TEST SUITES COMPLETED SUCCESSFULLY!")
+	print("🎉 ALL 16 TEST SUITES COMPLETED SUCCESSFULLY!")
 	print("=========================================")
 end
 
