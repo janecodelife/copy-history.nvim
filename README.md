@@ -28,9 +28,22 @@ vim.pack.add({
 
 -- Initialize with minimal zero-treesitter defaults
 require("copy-history").setup({
-    keymap = "<leader>ch",  -- Hotkey combination to open the viewer window
-    max_history = 10,       -- Number of copied text snippets to remember
+	keymap = "<leader>ch", -- Keymap to open the copy history floating window
+	max_history = 10, -- Maximum number of copied snippets to store
+	border = "rounded", -- Border style: "rounded", "single", "double", "solid"
+	max_payload_size = 10 * 1024 * 1024, -- Safety limiter: 10 MB payload ceiling
+	syntax_highlight = true, -- true: Tree-sitter colors | false: plain text (0ms CPU)
+	close_on_q = true, -- Map 'q' to dismiss window (alongside <Esc>) default is <ESC>
+	storage_dir = nil, -- Directory for history JSON (nil = stdpath('data'))
+	window = {
+		width = 0.88, -- Total width ratio (0.0 - 1.0) or fixed column count
+		height = 0.60, -- Total height ratio (0.0 - 1.0) or fixed row count
+		preview_ratio = 0.55, -- Width fraction for preview pane (55%)
+		min_height = 8, -- Minimum window height in terminal rows
+		preview = true, -- Set to false to disable side-by-side preview
+	},
 })
+
 ```
 
 ### Full Configuration (Optional)
@@ -89,9 +102,9 @@ require("copy-history").setup({
 
 If this utility boosts your everyday speed and eliminates annoying file search clutter, please consider buying me a coffee or supporting my continuous maintenance!
 
-You can tip or donate directly to my **TRON (TRX / USDT-TRC20)** crypto wallet address:
+You can tip or donate directly to my **TRON (TRX / USDT-TRC20)**  wallet address:
 
-## ☕☕☕☕ Support Me By Coffee Via USDT ☕☕☕☕
+## ☕☕☕☕ Support My Work. Buy Me Coffee Via USDT (Help Me Buy Dev Laptop)☕☕☕☕
 
 - **Network:** `TRX Tron (TRC20)`
 - **Address:** `TAFFjBP39Z86weL5dDU1A2251VrgPprDUj`
@@ -122,7 +135,7 @@ Check out my other open-source tools to supercharge your Neovim environment from
 ---
 
 # ThankYou
-
+frtzhahn (aldrin)
 ## Upcoming 🚀 (Stay Tuned!)
 
 ### The Ultimate Neovim Config for Modern Web & Laravel Devs ⚡
