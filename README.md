@@ -6,14 +6,12 @@
 A lightweight, high-performance, and minimalist clipboard history manager for Neovim. It automatically tracks everything you copy (yank) and lets you recall and paste it instantly via a floating window in a blink That Support Single Lines  And Mutiple Lines.
 
 ## ✨ Features
-- **Zero Dependencies:** Written purely in Lua, running 100% locally with zero external requirements.
+- **Zero Dependencies & Zero-Treesitter Required:** Written purely in Lua and native Neovim C-APIs, running 100% locally. Tree-sitter is strictly optional for syntax colors and never required for previewing or live editing.
+- **Side-by-Side Synchronized Preview:** Live preview window updating in real-time as you navigate recent snippets.
+- **Live In-Preview Editing:** Edit text snippets directly in the preview window before pasting (`e` or `i`), with `<C-s>` to save & paste in both Normal and Insert modes.
 - **Duplicate Prevention:** Automatically removes older duplicate text snippets to keep your history clean.
-- **Support Single And Mutiple Lines:** Support And Working with single and multiple lines
-- **Support Previews And File Names And Line Numbers :** Thank You frtzhahn
-- **Support Tree-sitter Toggling :** Enable or disable Tree-sitter support if you got limited cpus and ram
-- **Support Edit Before Paste :** edit already saved history before paste them again
-- **Support Not Losing History After Close Neovim :** History will be saved
-
+- **Support Single And Multiple Lines:** Support and working with single and multiple lines.
+- **Per-Directory Persistence:** History is stored cleanly per workspace/directory in Neovim data storage.
 
 ---
 
@@ -28,8 +26,7 @@ vim.pack.add({
 	"https://github.com/janecodelife/copy-history.nvim",
 })
 
-
--- Initialize and configure the plugin
+-- Initialize with minimal zero-treesitter defaults
 require("copy-history").setup({
 	keymap = "<leader>ch", -- Keymap to open the copy history floating window
 	max_history = 10, -- Maximum number of copied snippets to store
@@ -49,58 +46,29 @@ require("copy-history").setup({
 
 ```
 
--- Full Core configs 
-
-```
+### Full Configuration (Optional)
+```lua
 require("copy-history").setup({
-    -- Core Options
-    keymap = "<leader>ch",                 -- Keymap to toggle the history picker
-    max_history = 10,                      -- Maximum number of copied items to retain
-    border = "rounded",                    -- Floating border ("single", "double", "rounded", "solid", "shadow")
-    max_payload_size = 10 * 1024 * 1024,   -- 10 MB payload safety limit
-    storage_dir = nil,                     -- Defaults to stdpath('data') .. '/copy-history'
-    
-    -- UI & Behavior Options
-    syntax_highlight = false,              -- Set true if you want optional syntax highlighting
-    close_on_q = true,                     -- Map 'q' to close picker (in addition to <Esc>)
-    
-    -- Customizable In-Picker Keymaps
+    keymap = "<leader>ch",              -- Global keymap to open history window
+    max_history = 10,                   -- Max copied snippets to store
+    syntax_highlight = false,           -- false: fast zero-treesitter plain-text | true: tree-sitter colors
+    close_on_q = true,                  -- Map 'q' to close history window (in addition to <Esc>)
     keymaps = {
-        edit = { "e", "i" },               -- Keys to unlock and edit snippet in preview
-        save = "<C-s>",                    -- Pure Save: updates history & disk without closing (Normal & Insert)
-        paste = "<CR>",                    -- Paste & Exit: pastes snippet at cursor and dismisses picker (also 'p')
-        paste_before = "P",                -- Multi-Paste: pastes at cursor while leaving picker open
-        delete = { "d", "<Del>" },         -- Delete selected item from history
-        yank = "y",                        -- Yank selected item to system register
-        close = "<Esc>",                   -- Dismiss picker
+        edit = { "e", "i" },            -- Enter preview edit mode
+        save_and_paste = "<C-s>",       -- Save & paste from edit mode (Normal & Insert mode)
+        paste = "<CR>",                 -- Paste after cursor (also 'p')
+        paste_before = "P",             -- Paste before cursor
+        delete = { "d", "<Del>" },      -- Delete item from history
+        yank = "y",                     -- Yank item to clipboard
+        close = "<Esc>",                -- Dismiss window
     },
-    
-    -- Sizing & Layout Options
     window = {
-        width = 0.88,                      -- Width ratio (0.0 to 1.0) or fixed columns
-        height = 0.60,                     -- Height ratio (0.0 to 1.0) or fixed rows
-        preview_ratio = 0.55,              -- Portion allocated to preview (55%)
-        min_height = 8,                    -- Minimum vertical rows
-        preview = true,                    -- Enable or disable preview window
+        width = 0.88,                   -- Window width ratio (88%)
+        height = 0.60,                  -- Window height ratio (60%)
+        preview_ratio = 0.55,           -- Preview window width ratio (55%)
     },
 })
 ```
-## Interactive Keybindings Reference
-
-| Context | Keymap | Action |
-|---------|--------|--------|
-| **List Picker** | `<CR>` / `p` | **Paste & Exit:** Pastes selected snippet at cursor and closes picker |
-| **List Picker** | `P` | **Multi-Paste:** Pastes snippet at cursor while keeping picker window open |
-| **List Picker** | `e` / `i` | **Enter Edit Mode** in preview buffer (or single‑pane buffer swap) |
-| **List Picker** | `d` / `<Del>` | Delete selected entry from history and disk |
-| **List Picker** | `y` | Yank selected entry to system clipboard (`"` and `+` registers) |
-| **List Picker** | `<Esc>` / `q` | Dismiss picker immediately |
-| **Preview / Edit** | `<C-s>` | **Pure Save:** Saves edits to history & disk, stays open in Normal & Insert modes |
-| **Preview / Edit** | `<CR>` | **Paste & Exit:** Saves edits, closes window, and pastes into code buffer |
-| **Preview / Edit** | `P` | **Multi-Paste:** Saves edits and pastes into buffer while keeping preview open |
-| **Preview / Edit** | `u` | **Undo:** Undoes edits back to original snippet baseline without deleting content |
-| **Preview / Edit** | `<Esc>` | Return focus to snippet list (or swap back to list on small screens) |
-| **Global** | Defocus / Mouse | Dismisses window automatically when navigating away; auto‑promotes on mouse click |
 
 ## Demo Video 📺
 
@@ -110,14 +78,20 @@ require("copy-history").setup({
 
 ---
 
-
 ## 🚀 Usage
 
 1. Go about your normal coding routine and copy text snippets using regular Neovim operators (e.g., `yy`, `yw`, `viw+y`).
 2. Whenever you want to paste something from your history, press **`<leader>ch`** (Space + c + h by default) in **Normal Mode**.
-3. A centered floating window will open showing your recent copy history snippets.
-4. **Navigate** up/down the list, then press **`Enter`** on any line to automatically close the window and paste that text right after your cursor!
-5. To close the picker menu without pasting anything, simply press **`q`**.
+3. A centered floating window will open showing your recent copy history snippets alongside a synchronized preview pane.
+4. **Interactive Keybindings**:
+   - **`Enter`** / **`p`**: Paste the selected snippet after your cursor.
+   - **`P`**: Paste the selected snippet before your cursor.
+   - **`e`** or **`i`**: Enter **Edit Mode** in the preview window to modify the snippet before pasting.
+     - While editing: Press **`<C-s>`** (in either Normal or Insert mode) or **`<CR>`** (Normal mode) to save & paste immediately!
+     - Press **`<Esc>`** in Normal mode to auto-sync your edits and return focus to the list.
+   - **`y`**: Yank selected snippet to system clipboard without pasting.
+   - **`d`** / **`<Del>`**: Remove selected snippet from history.
+   - **`q`** / **`<Esc>`**: Dismiss the window without pasting.
 
 --- 
 
