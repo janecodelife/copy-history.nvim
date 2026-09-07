@@ -301,6 +301,11 @@ function M.open_history_window()
 		end
 	end
 
+	-- Non-blocking transient echo that never triggers 'Press ENTER or type command to continue'
+	local function echo_notice(msg)
+		pcall(vim.api.nvim_echo, { { " 󰅍 " .. msg, "ModeMsg" } }, false, {})
+	end
+
 	-- Multi-paste executor: pastes into origin_win without closing the history window
 	local function paste_stay_open(lines, paste_after)
 		if not lines or #lines == 0 then
@@ -310,13 +315,25 @@ function M.open_history_window()
 			vim.api.nvim_win_call(origin_win, function()
 				pcall(vim.api.nvim_put, lines, "c", paste_after, true)
 			end)
-			vim.notify("Copy History: Pasted entry (window stays open).", vim.log.levels.INFO)
+			echo_notice("Pasted entry (window stays open).")
 		end
 	end
 
 	local cur_edit_idx = nil
 	local orig_preview_title = nil
 	local is_swapped_single_pane = false
+
+	-- Helper to populate preview_buf and initialize a clean undo tree baseline
+	local function set_preview_lines(lines)
+		if not preview_buf or not vim.api.nvim_buf_is_valid(preview_buf) then
+			return
+		end
+		vim.bo[preview_buf].modifiable = true
+		local old_ul = vim.bo[preview_buf].undolevels
+		vim.bo[preview_buf].undolevels = -1
+		vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
+		vim.bo[preview_buf].undolevels = old_ul
+	end
 
 	-- Synchronize preview window with active cursor selection
 	local function update_preview(idx)
@@ -325,16 +342,14 @@ function M.open_history_window()
 		end
 		local entry = M.history[idx]
 		if not entry then
-			vim.bo[preview_buf].modifiable = true
-			vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, { "-- No preview available --" })
+			set_preview_lines({ "-- No preview available --" })
 			vim.bo[preview_buf].modifiable = false
 			return
 		end
 
 		local text = M.get_entry_text(entry)
 		local lines = vim.split(text, "\n")
-		vim.bo[preview_buf].modifiable = true
-		vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
+		set_preview_lines(lines)
 		vim.bo[preview_buf].modifiable = false
 
 		if M.config.syntax_highlight and type(entry) == "table" and entry.filetype and entry.filetype ~= "" then
@@ -415,7 +430,7 @@ function M.open_history_window()
 	local function refresh_list_and_preview()
 		if #M.history == 0 then
 			close_all_windows()
-			vim.notify("Copy History: History is now empty.", vim.log.levels.INFO)
+			echo_notice("History is now empty.")
 			return
 		end
 		vim.bo[list_buf].modifiable = true
@@ -509,7 +524,7 @@ function M.open_history_window()
 		if text and text ~= "" then
 			vim.fn.setreg('"', text)
 			pcall(vim.fn.setreg, "+", text)
-			vim.notify("Copy History: Yanked entry to clipboard!", vim.log.levels.INFO)
+			echo_notice("Yanked entry to clipboard!")
 		end
 	end, list_buf)
 
@@ -591,12 +606,12 @@ function M.open_history_window()
 		end
 		cur_edit_idx = cur_idx
 
-		-- Ensure preview_buf holds current snippet text
+		-- Ensure preview_buf holds current snippet text with clean undo baseline
 		local entry = M.history[cur_idx]
 		local text = M.get_entry_text(entry)
 		local lines = vim.split(text, "\n")
+		set_preview_lines(lines)
 		vim.bo[preview_buf].modifiable = true
-		vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
 
 		if M.config.syntax_highlight and type(entry) == "table" and entry.filetype and entry.filetype ~= "" then
 			pcall(function()
@@ -664,7 +679,29 @@ function M.open_history_window()
 	-- Pure Save (<C-s>) in BOTH Normal and Insert mode: saves edits with notification, does NOT close
 	local function save_only()
 		sync_preview_to_history()
-		vim.notify("Copy History: Recent changes have been saved!", vim.log.levels.INFO)
+
+		local active_win = is_swapped_single_pane and list_win or preview_win
+		if active_win and vim.api.nvim_win_is_valid(active_win) then
+			pcall(vim.api.nvim_win_set_config, active_win, {
+				title = is_swapped_single_pane
+						and (list_width >= 35 and " 󰄬 Saved! (<C-s>: Save | <CR>: Paste | <Esc>: Back) " or " 󰄬 Saved ")
+					or (preview_width >= 40 and " 󰄬 Saved! (<C-s>: Save | <CR>: Paste | <Esc>: Done) " or " 󰄬 Saved "),
+				title_pos = "center",
+			})
+			vim.defer_fn(function()
+				if active_win and vim.api.nvim_win_is_valid(active_win) then
+					local revert_title = is_swapped_single_pane
+							and (list_width >= 35 and " 󰏫 Edit Mode (<C-s>: Save | <CR>: Paste | <Esc>: Back) " or " 󰏫 Edit ")
+						or (preview_width >= 40 and " 󰏫 Edit Mode (<C-s>: Save | <CR>: Paste | <Esc>: Done) " or " 󰏫 Edit Mode ")
+					pcall(vim.api.nvim_win_set_config, active_win, {
+						title = revert_title,
+						title_pos = "center",
+					})
+				end
+			end, 1500)
+		end
+
+		echo_notice("Recent changes have been saved!")
 	end
 	map_keys("n", cfg_keys.save or "<C-s>", save_only, preview_buf)
 	map_keys("i", cfg_keys.save or "<C-s>", save_only, preview_buf)

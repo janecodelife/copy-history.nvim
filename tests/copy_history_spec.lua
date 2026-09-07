@@ -309,8 +309,45 @@ local function run_tests()
 	vim.o.columns = orig_cols
 	print("✓ Test 18 passed!")
 
+	print("Running Test 19: Undo Protection ('u' preserves snippet baseline)...")
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "snippet to protect line 1", "snippet to protect line 2" })
+	vim.cmd("normal! ggVGy")
+	M_reloaded.open_history_window()
+	-- Enter edit mode
+	vim.api.nvim_feedkeys("e", "xt", false)
+	local p_win = vim.api.nvim_get_current_win()
+	local p_buf = vim.api.nvim_win_get_buf(p_win)
+	local initial_lines = vim.api.nvim_buf_get_lines(p_buf, 0, -1, false)
+	assert(initial_lines[1] == "snippet to protect line 1", "Initial line must match yanked snippet")
+
+	-- Press 'u' without making any changes: MUST NOT delete the snippet!
+	vim.api.nvim_feedkeys("u", "xt", false)
+	local after_undo_lines = vim.api.nvim_buf_get_lines(p_buf, 0, -1, false)
+	assert(#after_undo_lines == 2, "Undo should NOT wipe out snippet lines! Got " .. #after_undo_lines .. " lines")
+	assert(after_undo_lines[1] == "snippet to protect line 1", "Line 1 should remain intact after 'u'")
+
+	-- Now make a modification
+	vim.api.nvim_buf_set_lines(p_buf, 0, 1, false, { "modified line 1" })
+	assert(vim.api.nvim_buf_get_lines(p_buf, 0, 1, false)[1] == "modified line 1")
+
+	-- Press 'u' to undo the modification
+	vim.api.nvim_feedkeys("u", "xt", false)
+	local reverted_lines = vim.api.nvim_buf_get_lines(p_buf, 0, -1, false)
+	assert(reverted_lines[1] == "snippet to protect line 1", "Undo should restore snippet back to baseline")
+
+	-- Press 'u' again: MUST remain at baseline, never deleting the snippet
+	vim.api.nvim_feedkeys("u", "xt", false)
+	local final_lines = vim.api.nvim_buf_get_lines(p_buf, 0, -1, false)
+	assert(final_lines[1] == "snippet to protect line 1", "Repeated undo should stop at baseline")
+
+	-- Close window
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "xt", false)
+	assert(#vim.api.nvim_list_wins() == 1, "Window should close on <Esc>")
+	print("✓ Test 19 passed!")
+
 	print("=========================================")
-	print("🎉 ALL 18 TEST SUITES COMPLETED SUCCESSFULLY!")
+	print("🎉 ALL 19 TEST SUITES COMPLETED SUCCESSFULLY!")
 	print("=========================================")
 end
 
