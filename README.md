@@ -10,6 +10,8 @@ A lightweight, high-performance, and minimalist clipboard history manager for Ne
 💝 Support me by the only available way now: USDT to buy a new dev laptop. Info is below, 
 or contact me by 📩 email: janecodelife@gmail.com
 
+## Thank You So Much
+
 ---
 
 
