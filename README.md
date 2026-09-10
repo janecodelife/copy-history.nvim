@@ -5,6 +5,14 @@
 
 A lightweight, high-performance, and minimalist clipboard history manager for Neovim. It automatically tracks everything you copy (yank) and lets you recall and paste it instantly via a floating window in a blink That Support Single Lines  And Mutiple Lines.
 
+--- 
+
+Support me by the only available way now: USDT to buy a new dev laptop. Info is below, 
+or contact me by 📩 email: janecodelife@gmail.com
+
+---
+
+
 ## ✨ Features
 - **Zero Dependencies & Zero-Treesitter Required:** Written purely in Lua and native Neovim C-APIs, running 100% locally. Tree-sitter is strictly optional for syntax colors and never required for previewing or live editing.
 - **Side-by-Side Synchronized Preview:** Live preview window updating in real-time as you navigate recent snippets.
@@ -131,6 +139,7 @@ Check out my other open-source tools to supercharge your Neovim environment from
 - **[todo-tracker.nvim](https://github.com/janecodelife/todo-tracker.nvim)** - Assign and list app todos in a blink
 - **[folders-bookmark.nvim](https://github.com/janecodelife/folders-bookmark.nvim)** - Bookmark folders and accessing them by keymap in a blink
 - **[copy-history.nvim](https://github.com/janecodelife/copy-history.nvim)** - Access your copy (Yank) history and paste it again by 1 click in a blink.
+- **[rest-client.nvim](https://github.com/janecodelife/rest-client.nvim)** - run http request from anywhere in a blink
 
 ---
 
