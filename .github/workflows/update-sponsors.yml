@@ -1,0 +1,30 @@
+name: Update Sponsors in README
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # يعمل تلقائياً كل يوم في منتصف الليل
+  workflow_dispatch: # يتيح لك تشغيله يدوياً في أي وقت بضغطة زر
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+
+      - name: Generate Sponsors Grid
+        uses: JamesIves/github-sponsors-readme-action@v1
+        with:
+          token: ${{ secrets.METADATA_TOKEN }}
+          file: "README.md"
+          minimum: 100
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41851325+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "chore: update sponsors grid in README (Tier $15+)" || exit 0
+          git push origin main
