@@ -1,21 +1,14 @@
 # copy-history.nvim 📋
 
-[![Follow on X](https://img.shields.io/badge/Follow-@janecodelife-000000?style=for-the-badge&logo=x)](https://x.com/janecodelife)
-[![Subscribe on YouTube](https://img.shields.io/badge/Subscribe-@JaneCodeLife-FF0000?style=for-the-badge&logo=youtube)](https://www.youtube.com/@JaneCodeLife)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=github)](https://github.com/sponsors/janecodelife)
 
-A lightweight, high-performance, and minimalist clipboard history manager for Neovim. It automatically tracks everything you copy (yank) and lets you recall and paste it instantly via a floating window in a blink That Support Single Lines  And Mutiple Lines.
-
---- 
-
-💝 Support me by the only available way now: USDT to buy a new dev laptop. Info is below, 
-or contact me by 📩 email: janecodelife@gmail.com
-
-## Thank You So Much
+A lightweight, high-performance, and minimalist clipboard history manager for Neovim. It automatically tracks everything you copy (yank) and lets you recall and paste it instantly via a floating window in a blink That Support Single Lines And Mutiple Lines.
 
 ---
 
-
 ## ✨ Features
+
 - **Zero Dependencies & Zero-Treesitter Required:** Written purely in Lua and native Neovim C-APIs, running 100% locally. Tree-sitter is strictly optional for syntax colors and never required for previewing or live editing.
 - **Side-by-Side Synchronized Preview:** Live preview window updating in real-time as you navigate recent snippets.
 - **Live In-Preview Editing:** Edit text snippets directly in the preview window before pasting (`e` or `i`), with `<C-s>` to save & paste in both Normal and Insert modes.
@@ -28,6 +21,7 @@ or contact me by 📩 email: janecodelife@gmail.com
 ## 📦 Installation
 
 ### Using Neovim's Built-in Pack (`vim.pack`)
+
 Add the following to your configuration file (e.g., `init.lua`):
 
 ```lua
@@ -57,6 +51,7 @@ require("copy-history").setup({
 ```
 
 ### Full Configuration (Optional)
+
 ```lua
 require("copy-history").setup({
     keymap = "<leader>ch",              -- Global keymap to open history window
@@ -80,11 +75,9 @@ require("copy-history").setup({
 })
 ```
 
-## Demo Video 📺
+## Video 📺
 
-<p align="center">
-  <img src="assets/copy-history.gif" alt="copy-history-video" width="100%">
-</p>
+[![Watch the video](./assets/copy-history.png)](https://www.youtube.com/watch?v=jBUKpSBhoxI)
 
 ---
 
@@ -103,56 +96,55 @@ require("copy-history").setup({
    - **`d`** / **`<Del>`**: Remove selected snippet from history.
    - **`q`** / **`<Esc>`**: Dismiss the window without pasting.
 
---- 
+---
 
+## 💝🤟 Support the Project 🤟💝
 
-## 💝 Support the Project
+<p align="center">
+  <a href="https://github.com/sponsors/janecodelife">
+    <img src="https://img.shields.io/badge/👉%20Become%20a%20Sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=github" alt="Become a Sponsor on GitHub" />
+  </a>
+</p>
 
-> _This plugin is built entirely on developer insights gathered over **years of building real-world software** to catch common pain points, combined with **months of dedicated building and rigorous testing** to ensure it operates flawlessly._
-
-If this utility boosts your everyday speed and eliminates annoying file search clutter, please consider buying me a coffee or supporting my continuous maintenance!
-
-You can tip or donate directly to my **TRON (TRX / USDT-TRC20)**  wallet address:
-
-## ☕☕☕☕ Support My Work. Buy Me Coffee Via USDT (Help Me Buy Dev Laptop)☕☕☕☕
-
-- **Network:** `TRX Tron (TRC20)`
-- **Address:** `TAFFjBP39Z86weL5dDU1A2251VrgPprDUj`
-
-> _Every bit of support fuels the expansion of this ecosystem and helps me write cleaner tools for all of us. Thank you for standing behind independent developers!_ 🙏
+Every bit of support fuels the expansion of this ecosystem and helps me write cleaner tools for all of us. Thank you for standing behind independent developers!_ 🙏🤟
 
 ---
 
-##  If Have A Question🤝 (Contact Me)
+## 💝🤟 A huge thank you to our sponsors! 💝🤟
 
-I will be there i am answer to all messages
-
-- **X (Twitter)**: [https://x.com/janecodelife](https://x.com/janecodelife)
-- **YouTube**: [https://www.youtube.com/@JaneCodeLife](https://www.youtube.com/@JaneCodeLife)
-- **Email**: [janecodelife@gmail.com](janecodelife@gmail.com)
+<!-- SPONSORS -->
+<!-- SPONSORS -->
 
 ---
 
 ## 🔗 My Other Plugins
 
-Check out my other open-source tools to supercharge your Neovim environment from real-world developers use case problem solving:
+Check out my other open-source tools to supercharge your Neovim environment:
 
 - **[livewire-secure-properties](https://github.com/janecodelife/livewire-secure-properties)** - Secure livewire app properties by default and void headache.
 - **[todo-tracker.nvim](https://github.com/janecodelife/todo-tracker.nvim)** - Assign and list app todos in a blink
 - **[folders-bookmark.nvim](https://github.com/janecodelife/folders-bookmark.nvim)** - Bookmark folders and accessing them by keymap in a blink
-- **[copy-history.nvim](https://github.com/janecodelife/copy-history.nvim)** - Access your copy (Yank) history and paste it again by 1 click in a blink.
+- **[copy-history.nvim](https://github.com/janecodelife/copy-history.nvim)** - Access your copy (Yank) history and paste it again with support of edit by 1 click in a blink.
 - **[rest-client.nvim](https://github.com/janecodelife/rest-client.nvim)** - run http request from anywhere in a blink
+- **[smart-window-focus.nvim](https://github.com/janecodelife/smart-window-focus.nvim)** - resize split window on focus to be full size to easy to see and debug.
 
 ---
 
-# ThankYou
-frtzhahn (aldrin)
+## If Have A Question 🤝 (Contact Me) 🤟
+
+I will be there to answer to all messages
+
+- **X (Twitter)**: [https://x.com/janecodelife](https://x.com/janecodelife)
+- **YouTube**: [https://www.youtube.com/@JaneCodeLife](https://www.youtube.com/@JaneCodeLife)
+- **Email**: [janecodelife@gmail.com](janecodelife@gmail.com)
+
+[![Follow on X](https://img.shields.io/badge/Follow-@janecodelife-000000?style=for-the-badge&logo=x)](https://x.com/janecodelife)
+[![Subscribe on YouTube](https://img.shields.io/badge/Subscribe-@JaneCodeLife-FF0000?style=for-the-badge&logo=youtube)](https://www.youtube.com/@JaneCodeLife)
+
+---
+
 ## Upcoming 🚀 (Stay Tuned!)
 
-### The Ultimate Neovim Config for Modern Web & Laravel Devs ⚡
+### The Ultimate Neovim Config for All Modern Web & Laravel Devs ⚡
 
-I am currently cooking a comprehensive guide and boilerplate configuration on **How to turn Neovim into a (Powerful) IDE** explicitly optimized for:
-
-- **Backend & Frameworks**: PHP (Intelephense) & Full Laravel & Livewire Integration (With Preformance)
-- **Frontend & Tooling**: HTML, CSS, JavaScript, TypeScript, and Livewire SFCs
-- **Speed**: Blazing fast autocompletion, lightning-speed code navigation, and fuzzy finding.
+# Thank You
